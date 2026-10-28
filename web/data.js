@@ -64,6 +64,14 @@ var Prefs = (function () {
     longitude: function () { return pick('longitude', Place.lon); },
     /** The TMDB key typed on the TV (Home Settings → TMDB key), or config.properties' ('' for none). */
     tmdbKey: function () { return String(pick('tmdbKey', CONFIG.tmdbKey || '')).trim(); },
+    aioUrl: function () {
+      var saved = pick('aioUrl', CONFIG.aioUrl || '');
+      saved = String(saved || '').replace(/\s+/g, '').replace(/\/+$/, '');
+      return saved;
+    },
+    aioUser: function () { return String(pick('aioUser', CONFIG.aioUser || '')).trim(); },
+    aioPassword: function () { return String(pick('aioPassword', CONFIG.aioPassword || '')); },
+    aioToken: function () { return String(pick('aioToken', '') || ''); },
     /** True when the key in use was typed on the TV (Remove takes it back to config.properties'). */
     tmdbKeyOnTV: function () { return v.tmdbKey !== undefined; },
     setCity: function (name, lat, lon) { v.city = name; v.latitude = lat; v.longitude = lon; save(); this.version++; },
@@ -355,7 +363,8 @@ var Data = (function () {
   }
 
   function sourceStamp() {
-    var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (CONFIG.hideAnimation ? ':no-animation' : '');
+    var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (CONFIG.hideAnimation ? ':no-animation' : '')
+        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser();
     for (var i = 0; i < SERVICES.length; i++) s += usable(SERVICES[i][1]) ? '1' : '0';
     return s;
   }
@@ -367,14 +376,30 @@ var Data = (function () {
   }
 
   /** This hour's picks (Prefs.cards()): movies ("movie"), shows ("tv") or both (null). */
+  function aioOn() { return !!Prefs.aioUrl(); }
+
   function now(kind) {
     var list = [];
+    if (aioOn()) {
+      for (var a = 0; a < picks.length; a++) {
+        var item = picks[a];
+        if (!item.aio) continue;
+        if (kind === null) { if (item.recent) list.push(item); }
+        else if (!item.recent && item.kind === kind) list.push(item);
+      }
+      return sliceHour(list);
+    }
     if (!KEY) return list;
     for (var i = 0; i < picks.length; i++) {
       var p = picks[i];
       if ((kind === null || kind === p.kind) && (!p.detailed || (p.app && usable(p.app)))) list.push(p);
     }
     if (!list.length) return list;
+    return sliceHour(list);
+  }
+
+  function sliceHour(list) {
+    if (!list.length) return [];
     var hour = Math.floor(Date.now() / 3600000), out = [], seen = {}, n = Prefs.cards();
     for (var j = 0; j < list.length && out.length < n; j++) {
       var q = list[(hour * n + j) % list.length], f = franchise(q.title);
@@ -503,7 +528,89 @@ var Data = (function () {
     })();
   }
 
+  function aioBase() { return Prefs.aioUrl(); }
+
+  function aioCall(method, path, body, done, authed) {
+    var x = new XMLHttpRequest();
+    var over = false;
+    x.open(method, aioBase() + path, true);
+    x.timeout = 15000;
+    x.setRequestHeader('Accept', 'application/json');
+    if (authed !== false && Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
+    if (body) x.setRequestHeader('Content-Type', 'application/json');
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4 || over) return;
+      over = true;
+      var json = null;
+      try { json = JSON.parse(x.responseText || '{}'); } catch (e) { json = null; }
+      if (x.status === 401) { Prefs.set('aioToken', ''); done(new Error(trSafe('The media manager refused the login.'))); return; }
+      if (x.status < 200 || x.status >= 300) {
+        var detail = json && json.detail ? json.detail : ('HTTP ' + x.status);
+        done(new Error(detail));
+        return;
+      }
+      done(null, json || {});
+    };
+    x.ontimeout = x.onerror = function () { if (!over) { over = true; done(new Error('no connection')); } };
+    x.send(body ? JSON.stringify(body) : null);
+  }
+
+  function trSafe(text) { return typeof tr === 'function' ? tr(text) : text; }
+
+  function ensureAio(done) {
+    if (!aioOn()) { done(new Error(trSafe('Fill in the server, username and password.'))); return; }
+    if (Prefs.aioToken()) { done(null); return; }
+    if (!Prefs.aioUser() || !Prefs.aioPassword()) { done(new Error(trSafe('Fill in the server, username and password.'))); return; }
+    aioCall('POST', '/api/auth/login', {username: Prefs.aioUser(), password: Prefs.aioPassword()}, function (err, res) {
+      if (err) { done(err); return; }
+      if (!res.access_token) { done(new Error(trSafe('The media manager did not return a session.'))); return; }
+      Prefs.set('aioToken', res.access_token);
+      done(null);
+    }, false);
+  }
+
+  function aioImage(poster) {
+    if (!poster) return '';
+    var url = poster;
+    if (url.charAt(0) === '/') url = aioBase() + url;
+    return url.replace('/w92/', '/w780/').replace('/w154/', '/w780/').replace('/w185/', '/w780/').replace('/w342/', '/w780/');
+  }
+
+  function aioPick(row, recent) {
+    var kind = (row.mediaType || 'movie').toLowerCase();
+    if (kind === 'series' || kind === 'show') kind = 'tv';
+    if (kind !== 'tv') kind = 'movie';
+    var id = row.mediaId || row.id || 0;
+    return {
+      aio: true, recent: recent, kind: kind, id: id,
+      title: row.title || '',
+      meta: row.detail || row.status || '',
+      poster: aioImage(row.poster || ''),
+      backdrop: aioImage(row.poster || ''),
+      canRequest: !recent && !!(row.can_request || row.canRequest),
+      mediaType: kind, mediaId: id,
+      detailed: true, app: recent || !(row.can_request || row.canRequest) ? 'library' : 'request'
+    };
+  }
+
+  function fetchAio(done) {
+    ensureAio(function (err) {
+      if (err) { done(err); return; }
+      aioCall('GET', '/api/homepage', null, function (e, home) {
+        if (e) { done(e); return; }
+        var list = [];
+        var trending = home.trending || [], recent = home.recent || [];
+        for (var i = 0; i < trending.length; i++) if (trending[i].title) list.push(aioPick(trending[i], false));
+        for (var j = 0; j < recent.length; j++) if (recent[j].title) list.push(aioPick(recent[j], true));
+        if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
+        picks = list;
+        done(null);
+      });
+    });
+  }
+
   function fetchList(done) {
+    if (aioOn()) { fetchAio(done); return; }
     tmdb('/watch/providers/movie?language=' + lang() + '&watch_region=' + REGION, function (err, res) {
       if (err) { done(err); return; }
       var ids = [];
@@ -544,7 +651,8 @@ var Data = (function () {
 
   /** Fetches the list when stale (6 h, a new period of the day, language, key or apps), then this hour's details. */
   function refreshRecs() {
-    if (!KEY || fetchingRecs || !installed.length) return;
+    if (fetchingRecs) return;
+    if (!aioOn() && (!KEY || !installed.length)) return;
     var t = Date.now(), p = hourPeriod(new Date()), st = sourceStamp();
     if (st === stamp && failedAt && t - failedAt < 10 * 60000 && t >= failedAt) return;
     var stale = st !== stamp || p !== period || t - listAt > 6 * 3600000 || t < listAt || !picks.length || listLang !== I18N.lang;
@@ -617,14 +725,73 @@ var Data = (function () {
     changes: changes,
     get pricesAt() { return pricesAt; },
     activeCoins: activeCoins,
-    hasKey: function () { return !!KEY; },
+    hasKey: function () { return aioOn() || !!KEY; },
+    aioOn: aioOn,
     checkKey: checkKey,
     /** A key typed (or removed) on the TV: the picks come again with it, or go. */
     keyChanged: function () { KEY = Prefs.tmdbKey(); recsError = ''; failedAt = 0; refreshRecs(); changed(); },
     recsError: function () { return recsError; },
     picks: now,
-    showcase: all,
-    image: function (path, size) { return path ? 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path : ''; },
+    showcase: function () {
+      if (!aioOn()) return all();
+      var out = [], seen = {};
+      for (var i = 0; i < picks.length; i++) {
+        var p = picks[i];
+        if (p.aio && !p.recent && p.backdrop && !seen[p.kind + ':' + p.id]) { seen[p.kind + ':' + p.id] = true; out.push(p); }
+      }
+      return out;
+    },
+    image: function (path, size) {
+      if (!path) return '';
+      if (path.indexOf('http') === 0 || path.charAt(0) === '/') return aioImage(path);
+      return 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path;
+    },
+    needsAuth: function (url) { return !!url && aioBase() && url.indexOf(aioBase()) === 0; },
+    loadImage: function (url, done) {
+      var x = new XMLHttpRequest();
+      x.open('GET', url, true);
+      x.responseType = 'blob';
+      x.timeout = 15000;
+      if (Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
+      x.onload = function () {
+        if (x.status === 200 && x.response) done(URL.createObjectURL(x.response));
+      };
+      x.send();
+    },
+    requestTitle: function (kind, id, done) {
+      ensureAio(function (err) {
+        if (err) { done(err); return; }
+        var body = {mediaType: kind === 'tv' ? 'tv' : 'movie', mediaId: id};
+        if (body.mediaType === 'tv') body.seasons = 'all';
+        aioCall('POST', '/api/homepage/request', body, function (e, res) {
+          if (e) { done(e); return; }
+          if (res && res.ok === false) { done(new Error(res.detail || 'refused')); return; }
+          done(null);
+        });
+      });
+    },
+    ping: function (done) {
+      Prefs.set('aioToken', '');
+      ensureAio(function (err) {
+        if (err) { done(err); return; }
+        aioCall('GET', '/api/homepage', null, function (e, home) {
+          if (e) done(e);
+          else done(null, (home.trending || []).length, (home.recent || []).length);
+        });
+      });
+    },
+    searchTitles: function (query, done) {
+      ensureAio(function (err) {
+        if (err) { done(err); return; }
+        aioCall('GET', '/api/homepage/search?provider=seerr&q=' + encodeURIComponent(query), null, function (e, res) {
+          if (e) { done(e); return; }
+          var rows = (res && res.results) || [];
+          var out = [];
+          for (var i = 0; i < rows.length && out.length < 12; i++) out.push(aioPick(rows[i], false));
+          done(null, out);
+        });
+      });
+    },
 
     /** Night at the location: from sunset to sunrise (the last forecast; without one, 6:00 and 18:00). */
     isNight: function (at) {

@@ -14,6 +14,9 @@ out/
 *.wgt
 __pycache__/
 
+# Local API notes, not part of the app
+.research/
+
 # macOS
 .DS_Store
 tools/.i18n-cache.json

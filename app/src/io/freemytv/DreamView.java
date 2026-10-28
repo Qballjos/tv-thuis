@@ -271,6 +271,12 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         for (Paint p : new Paint[] {cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, titlePaint, metaPaint, barPaint}) {
             p.setShadowLayer(18 * k, 0, 2 * k, 0x66000000);
         }
+        if (Aio.configured()) {
+            // Dim chrome on a black field: a bright clock left in one place marks an OLED panel.
+            cornerClock.setColor(0xD4FFFFFF);
+            clockPaint.setColor(0xD4FFFFFF);
+            cornerClock.setShadowLayer(8 * k, 0, 1 * k, 0x88000000);
+        }
         fitPlaying();
         glassFor = "";
         dirty = true;
@@ -280,8 +286,9 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     // MARK: - Photos
 
-    /** Your photos when they are on, otherwise the picks'. */
+    /** Trending posters when the media manager is set up; otherwise your photos, or the picks. */
     private List<Recs.Pick> photos() {
+        if (Aio.configured()) return recs.showcase();
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
 
@@ -327,8 +334,12 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             Bitmap[] images = null;
             float[] light = new float[2];
             try {
-                images = Backdrop.photo(file, PW, PH, light);
-                images[0] = Backdrop.gpu(withScrims(images[0], chosen.photo == null, light[0], light[1]));
+                if (chosen.aio) images = Backdrop.contain(file, PW, PH, light);
+                else {
+                    images = Backdrop.photo(file, PW, PH, light);
+                    images[0] = withScrims(images[0], chosen.photo == null, light[0], light[1]);
+                }
+                images[0] = Backdrop.gpu(images[0]);
             } catch (Exception | OutOfMemoryError e) {
                 AppLog.w("screensaver: photo for “" + (chosen.photo != null ? chosen.photo.getName() : chosen.title) + "”: " + e.getMessage());
             }
@@ -742,15 +753,17 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
                     .setIncludePad(false).build();
             float originY = titleBase - t.getLineBaseline(t.getLineCount() - 1);
             float capTop = originY + t.getLineBaseline(0) - Ui.cap(titlePaint);
-            c.drawText(Recs.periodLabel(), x, capTop - 30 * k, labelPaint);
+            c.drawText(s.pick.aio ? Ui.tr("TRENDING") : Recs.periodLabel(), x, capTop - 30 * k, labelPaint);
             c.save();
             c.translate(x - Ui.leftBearing(titlePaint, title), originY);
             t.draw(c);
             c.restore();
             if (s.pick.meta != null && !s.pick.meta.isEmpty()) c.drawText(s.pick.meta, x, metaBase, metaPaint);
             if (hint) {
-                c.drawText(Ui.trf("Press OK to watch on {app} · any other button to close", "app", Recs.serviceName(s.pick)),
-                        x, META_BASE * k, hintPaint);
+                String line = s.pick.canRequest
+                        ? Ui.tr("Press OK to request · any other button to close")
+                        : Ui.trf("Press OK to watch on {app} · any other button to close", "app", Recs.serviceName(s.pick));
+                c.drawText(line, x, META_BASE * k, hintPaint);
             }
         } finally {
             s.caption.endRecording();
@@ -768,6 +781,19 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     boolean watch() {
         Recs.Pick p = watchable();
         if (p == null) return false;
+        if (p.aio && p.canRequest) {
+            final String kind = p.kind;
+            final int id = p.id;
+            new Thread(() -> Aio.request(kind, id), "aio-request").start();
+            return true;
+        }
+        if (p.aio) {
+            String player = Aio.playerPackage(getContext());
+            if (player == null) return false;
+            boolean opened = HomeApps.open(getContext(), HomeApps.app(player, player.contains("plex") ? "Plex" : "Jellyfin", null), null);
+            if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + player);
+            return opened;
+        }
         boolean opened = HomeApps.open(getContext(), HomeApps.app(p.pkg, Recs.serviceName(p), p.link), null);
         if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + p.pkg);
         return opened;

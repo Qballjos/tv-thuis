@@ -180,6 +180,42 @@ final class Backdrop {
         return new Bitmap[] {out, frost};
     }
 
+    /**
+     * Screensaver for an OLED or Mini-LED panel: the trending poster sits inside a true-black frame
+     * (unused pixels stay off) instead of being cropped to fill the screen.
+     */
+    static Bitmap[] contain(java.io.File f, int w, int h, float[] light) throws java.io.IOException {
+        android.graphics.BitmapFactory.Options bounds = new android.graphics.BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        android.graphics.BitmapFactory.decodeFile(f.getPath(), bounds);
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) throw new java.io.IOException("unreadable image");
+        int maxSide = Math.max(w, h);
+        android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
+        opts.inSampleSize = 1;
+        while (bounds.outWidth / (opts.inSampleSize * 2) >= maxSide && bounds.outHeight / (opts.inSampleSize * 2) >= maxSide) {
+            opts.inSampleSize *= 2;
+        }
+        Bitmap src = android.graphics.BitmapFactory.decodeFile(f.getPath(), opts);
+        if (src == null) throw new java.io.IOException("unreadable image");
+        float scale = Math.min((float) w / src.getWidth(), (float) h / src.getHeight());
+        int dw = Math.max(1, Math.round(src.getWidth() * scale));
+        int dh = Math.max(1, Math.round(src.getHeight() * scale));
+        Bitmap fitted = Bitmap.createScaledBitmap(src, dw, dh, true);
+        if (fitted != src) src.recycle();
+        Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas canvas = new android.graphics.Canvas(out);
+        canvas.drawColor(0xFF000000);
+        canvas.drawBitmap(fitted, (w - dw) / 2f, (h - dh) / 2f, new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG));
+        fitted.recycle();
+        if (light != null && light.length >= 2) {
+            light[0] = 0.02f;
+            light[1] = 0.02f;
+        }
+        int fw = w / PHOTO_FROST, fh = h / PHOTO_FROST;
+        Bitmap frost = Bitmap.createBitmap(reduce(out, fw, fh, 3, 2), fw, fh, Bitmap.Config.ARGB_8888);
+        return new Bitmap[] {out, frost};
+    }
+
     /** The center of the photo at the card's aspect ratio, filtered down to the exact size. */
     static Bitmap card(Bitmap full, int w, int h) {
         Bitmap b = center(full, (float) w / h);

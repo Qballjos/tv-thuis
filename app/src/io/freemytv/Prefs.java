@@ -238,6 +238,62 @@ final class Prefs {
         version++;
     }
 
+    // MARK: - AIO media manager (Home Settings). The TV's values win over config.properties.
+
+    static String aioUrl() {
+        String saved = app != null && sp().contains("aioUrl") ? sp().getString("aioUrl", "") : Config.AIO_URL;
+        if (saved == null) return "";
+        saved = saved.trim();
+        while (saved.endsWith("/")) saved = saved.substring(0, saved.length() - 1);
+        return saved;
+    }
+
+    static String aioUser() {
+        String saved = app != null && sp().contains("aioUser") ? sp().getString("aioUser", "") : Config.AIO_USER;
+        return saved == null ? "" : saved.trim();
+    }
+
+    static String aioPassword() {
+        String saved = app != null && sp().contains("aioPassword") ? sp().getString("aioPassword", "") : Config.AIO_PASSWORD;
+        return saved == null ? "" : saved;
+    }
+
+    static boolean aioPasswordSet() { return !aioPassword().isEmpty(); }
+
+    static String aioToken() {
+        return app == null ? "" : sp().getString("aioToken", "");
+    }
+
+    static void setAioUrl(String url) {
+        keepAio().putString("aioUrl", url == null ? "" : url.trim()).putString("aioToken", "").commit();
+        version++;
+    }
+
+    static void setAioUser(String user) {
+        keepAio().putString("aioUser", user == null ? "" : user.trim()).putString("aioToken", "").commit();
+        version++;
+    }
+
+    static void setAioPassword(String password) {
+        keepAio().putString("aioPassword", password == null ? "" : password).putString("aioToken", "").commit();
+        version++;
+    }
+
+    static void setAioToken(String token) {
+        if (app == null) return;
+        sp().edit().putString("aioToken", token == null ? "" : token).commit();
+        version++;
+    }
+
+    /** Copies the build's values the first time the TV saves one field, so the others are not lost. */
+    private static android.content.SharedPreferences.Editor keepAio() {
+        android.content.SharedPreferences.Editor e = sp().edit();
+        if (!sp().contains("aioUrl")) e.putString("aioUrl", Config.AIO_URL);
+        if (!sp().contains("aioUser")) e.putString("aioUser", Config.AIO_USER);
+        if (!sp().contains("aioPassword")) e.putString("aioPassword", Config.AIO_PASSWORD);
+        return e;
+    }
+
     // MARK: - Shelf
 
     /** Packages on the home shelf, in order; null until the user edits it (then the built-in list applies). */

@@ -52,7 +52,11 @@ final class Recs {
         String kind;            // "movie" or "tv"
         String title, backdrop, poster, meta = "", app, pkg;   // poster: the portrait image of the narrow cards
         String link;            // opens the title in its app (looked up with Watchmode), or null: the app's home
+        String imageUrl;        // a full image address (the media manager); null uses TMDB's backdrop path
         boolean detailed;
+        boolean aio;             // from the household media manager, not TMDB
+        boolean recent;          // recently added in the library (aio); otherwise a trending title
+        boolean canRequest;      // missing on the server: OK asks the media manager for it
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
 
@@ -70,7 +74,7 @@ final class Recs {
     private static final int ANIMATION = 16;
     private static final long LIST_EVERY = 6 * 3600_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 5;
+    private static final int CACHE_VERSION = 6;
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
     /** Service name on TMDB (part of the name, lowercase) → TV app (HomeApps key, package). */
     private static final String[][] SERVICES = {
@@ -219,7 +223,7 @@ final class Recs {
     void removeListener(Listener l) { listeners.remove(l); }
 
     static boolean hasKey(Context c) {
-        return !key().isEmpty();
+        return Aio.configured() || !key().isEmpty();
     }
 
     private static volatile String cachedKey = "";
@@ -304,6 +308,7 @@ final class Recs {
     /** This hour's picks, movies only ("movie") or shows only ("tv"); null = both (the home screen tabs). */
     List<Pick> now(String kind) {
         List<Pick> list = new ArrayList<>();
+        if (Aio.configured()) return aioNow(kind);
         if (!hasKey(context)) return list;    // no TMDB key: no recommendations
         Map<String, Boolean> have = new HashMap<>();   // one look per app, not per title (this runs every 15 s)
         for (Pick p : picks) {
@@ -328,6 +333,26 @@ final class Recs {
         return out;
     }
 
+    /** Media manager: Explore is recently added, Movies and Shows are this week's trending. */
+    private List<Pick> aioNow(String kind) {
+        List<Pick> list = new ArrayList<>();
+        for (Pick p : picks) {
+            if (!p.aio) continue;
+            if (kind == null) { if (p.recent) list.add(p); }
+            else if (!p.recent && kind.equals(p.kind)) list.add(p);
+        }
+        List<Pick> out = new ArrayList<>();
+        if (list.isEmpty()) return out;
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        int cards = Prefs.cards();
+        long hour = System.currentTimeMillis() / 3600_000L;
+        for (int i = 0; i < list.size() && out.size() < cards; i++) {
+            Pick p = list.get((int) ((hour * cards + i) % list.size()));
+            if (seen.add(franchise(p.title))) out.add(p);
+        }
+        return out;
+    }
+
     /** "Law & Order: Special Victims Unit" → "law & order" (what comes before ":" or " - "). */
     private static String franchise(String title) {
         String t = title == null ? "" : title.toLowerCase(Locale.ROOT);
@@ -336,8 +361,9 @@ final class Recs {
         return (cut > 0 ? t.substring(0, cut) : t).trim();
     }
 
-    /** Name of the service the pick is on ("Netflix"), or empty. */
+    /** Name of the service the pick is on ("Netflix"), or what OK does with a media-manager title. */
     static String serviceName(Pick p) {
+        if (p != null && p.aio) return p.canRequest ? Ui.tr("Request") : Ui.tr("Library");
         return p == null || p.app == null ? "" : SERVICE_NAME.get(p.app);
     }
 
@@ -433,6 +459,13 @@ final class Recs {
      */
     List<Pick> showcase() {
         List<Pick> out = new ArrayList<>();
+        if (Aio.configured()) {
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (Pick p : picks) {
+                if (p.aio && !p.recent && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
+            }
+            return out;
+        }
         if (!hasKey(context)) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (Pick p : wanted()) if (hasImage(p) && seen.add(franchise(p.title))) out.add(p);
@@ -510,6 +543,18 @@ final class Recs {
     // MARK: - TMDB
 
     private void fetchList(int p) throws Exception {
+        if (Aio.configured()) {
+            List<Pick> trending = new ArrayList<>(), recent = new ArrayList<>();
+            Aio.fill(trending, recent);
+            List<Pick> list = new ArrayList<>();
+            list.addAll(trending);
+            list.addAll(recent);
+            picks = list;
+            period = p;
+            listAt = System.currentTimeMillis();
+            listLanguage = Ui.language;
+            return;
+        }
         // None of the services we know is on the TV (or hide_services hides them all): no region would change that.
         boolean any = false;
         for (String[] s : SERVICES) any |= installed(s[2]);
@@ -785,7 +830,8 @@ final class Recs {
     }
 
     private long sourceStamp() {
-        long stamp = ((key().hashCode() * 31L + REGION.hashCode()) * 31L + (Config.HIDE_ANIMATION ? 1 : 0)) * 31L + Config.PLEX_URL.hashCode();
+        long stamp = ((key().hashCode() * 31L + REGION.hashCode()) * 31L + (Config.HIDE_ANIMATION ? 1 : 0)) * 31L
+                + Config.PLEX_URL.hashCode() * 31L + Aio.identity().hashCode();
         for (String[] service : SERVICES) stamp = stamp * 31L + (installed(service[2]) ? service[2].hashCode() : 0);
         return stamp;
     }
@@ -797,7 +843,7 @@ final class Recs {
     }
 
     private boolean needsLink(Pick p) {
-        return linksOn() && p.id > 0 && p.pkg != null && p.link == null
+        return !p.aio && linksOn() && p.id > 0 && p.pkg != null && p.link == null
                 && cache.getString(linkKey(p), null) == null && System.currentTimeMillis() >= linkRetryAt;
     }
 
@@ -809,7 +855,7 @@ final class Recs {
 
     /** Sets p.link from what was looked up before, or looks it up (2 requests of the free plan's 2,500 a month). */
     private void findLink(Pick p) {
-        if (!linksOn() || p.id < 0 || p.pkg == null || p.link != null) return;
+        if (p.aio || !linksOn() || p.id < 0 || p.pkg == null || p.link != null) return;
         String saved = cache.getString(linkKey(p), null);
         if (saved != null) {
             p.link = saved.isEmpty() ? null : saved;
@@ -968,6 +1014,19 @@ final class Recs {
 
     private void download(Pick p) throws IOException {
         File f = imageFile(p);
+        if (p.aio && (p.imageUrl == null || p.imageUrl.isEmpty())) return;
+        if (p.imageUrl != null && !p.imageUrl.isEmpty()) {
+            if (!f.exists()) fetchFile(f, Aio.openImage(p.imageUrl));
+            File poster = posterFile(p);
+            if (poster != null && !poster.exists()) {
+                try {
+                    fetchFile(poster, Aio.openImage(p.imageUrl));
+                } catch (IOException e) {
+                    AppLog.w("poster: " + e.getMessage());
+                }
+            }
+            return;
+        }
         if (!f.exists()) fetchFile(f, p.id < 0
                 ? plexOpen("/photo/:/transcode?width=1920&height=1080&minSize=1&url=" + URLEncoder.encode(p.backdrop, "UTF-8"))
                 : (HttpURLConnection) new URL(IMAGES + p.backdrop).openConnection());
@@ -1098,8 +1157,9 @@ final class Recs {
             for (Pick p : picks) {
                 a.put(new JSONObject().put("id", p.id).put("kind", p.kind).put("title", p.title).put("backdrop", p.backdrop)
                         .put("poster", p.poster == null ? "" : p.poster).put("link", p.link == null ? "" : p.link)
+                        .put("imageUrl", p.imageUrl == null ? "" : p.imageUrl)
                         .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
-                        .put("detailed", p.detailed));
+                        .put("detailed", p.detailed).put("aio", p.aio).put("recent", p.recent).put("canRequest", p.canRequest));
             }
             SharedPreferences.Editor e = cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
                     .putString("language", listLanguage)
@@ -1125,10 +1185,14 @@ final class Recs {
             p.backdrop = o.optString("backdrop");
             p.poster = o.optString("poster");
             p.link = o.optString("link").isEmpty() ? null : o.optString("link");
+            p.imageUrl = o.optString("imageUrl").isEmpty() ? null : o.optString("imageUrl");
             p.meta = o.optString("meta");
             p.app = o.optString("app").isEmpty() ? null : o.optString("app");
             p.pkg = o.optString("pkg").isEmpty() ? null : o.optString("pkg");
             p.detailed = o.optBoolean("detailed");
+            p.aio = o.optBoolean("aio");
+            p.recent = o.optBoolean("recent");
+            p.canRequest = o.optBoolean("canRequest");
             out.add(p);
         }
         return out;

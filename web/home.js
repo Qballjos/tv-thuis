@@ -315,11 +315,11 @@
 
   // MARK: - Focus
 
-  var Z = {TOP: 'top', CARDS: 'cards', SHELF: 'shelf', DRAWER: 'drawer', APPS: 'apps', SETTINGS: 'settings', EDIT: 'edit', LANG: 'lang', CITY: 'city', KEY: 'key', ABOUT: 'about'};
-  var st = {zone: Z.SHELF, top: 0, tab: 0, card: 0, shelf: 0, drawer: 0, grid: 0, row: 0, edit: 0, lang: 0, city: 0, key: 0};
+  var Z = {TOP: 'top', CARDS: 'cards', SHELF: 'shelf', DRAWER: 'drawer', APPS: 'apps', SETTINGS: 'settings', EDIT: 'edit', LANG: 'lang', CITY: 'city', KEY: 'key', AIO: 'aio', ABOUT: 'about'};
+  var st = {zone: Z.SHELF, top: 0, tab: 0, card: 0, shelf: 0, drawer: 0, grid: 0, row: 0, edit: 0, lang: 0, city: 0, key: 0, aio: 0};
   var cards = [];
 
-  function sheetOpen() { return st.zone === Z.APPS || st.zone === Z.SETTINGS || st.zone === Z.EDIT || st.zone === Z.LANG || st.zone === Z.CITY || st.zone === Z.KEY || st.zone === Z.ABOUT; }
+  function sheetOpen() { return st.zone === Z.APPS || st.zone === Z.SETTINGS || st.zone === Z.EDIT || st.zone === Z.LANG || st.zone === Z.CITY || st.zone === Z.KEY || st.zone === Z.AIO || st.zone === Z.ABOUT; }
 
   function updateFocus() {
     var i, list;
@@ -348,7 +348,7 @@
     focusRows($('langpick'), st.lang, st.zone === Z.LANG);
     if (langHint) langHint.textContent = (st.lang + 1) + ' / ' + languageChoices().length + '  ·  ' + tr('OK picks, Back cancels.');
     focusRows($('citypick'), st.city, st.zone === Z.CITY);
-    focusRows($('keypick'), st.key, st.zone === Z.KEY);
+    focusRows($('keypick'), st.zone === Z.AIO ? st.aio : st.key, st.zone === Z.KEY || st.zone === Z.AIO);
     setClass(body, 'drawer-open', st.zone === Z.DRAWER);
   }
 
@@ -384,7 +384,7 @@
     $('title').textContent = tr('For You');
     var tabs = $('tabs');
     tabs.innerHTML = '';
-    var names = [tr('Explore'), tr('Movies'), tr('Shows')];
+    var names = [tr(Data.aioOn() ? 'Recently added' : 'Explore'), tr('Movies'), tr('Shows')];
     for (var i = 0; i < 3; i++) {
       var t = el('button', 'tab', tabs, names[i]);
       hover(t, Z.TOP, i);
@@ -429,7 +429,7 @@
       var img = el('div', 'img', card);
       // Narrow: the poster (the backdrop cropped without one); the wide card fades its backdrop in over it, loaded then.
       var poster = el('div', 'layer', img);
-      poster.style.backgroundImage = 'url(' + (p.poster ? Data.image(p.poster, 'w342') : Data.image(p.backdrop, 'w780')) + ')';
+      paint(poster, p.poster || p.backdrop, p.poster ? 'w342' : 'w780');
       el('div', 'layer back', img);
       el('div', 'name', card, p.title);
       if (p.meta) el('div', 'meta', card, p.meta);
@@ -456,7 +456,7 @@
       setClass(n, 'edge', at < 0 || at > 1740);
       if (wide && !n.getAttribute('data-back') && cards[i]) {
         n.setAttribute('data-back', '1');
-        n.querySelector('.back').style.backgroundImage = 'url(' + Data.image(cards[i].backdrop, 'w1280') + ')';
+        paint(n.querySelector('.back'), cards[i].backdrop, 'w1280');
       }
       left += w + 40;
     }
@@ -484,7 +484,16 @@
       setClass($(bgFront), 'on', false);
       bgFront = next;
     };
-    img.src = url;
+    if (Data.needsAuth(url)) Data.loadImage(url, function (blob) { if (blob && bgUrl === url) { img.src = blob; } });
+    else img.src = url;
+  }
+
+  function paint(node, path, size) {
+    if (!node) return;
+    var src = Data.image(path, size);
+    if (!src) return;
+    if (Data.needsAuth(src)) Data.loadImage(src, function (blob) { if (blob) node.style.backgroundImage = 'url(' + blob + ')'; });
+    else node.style.backgroundImage = 'url(' + src + ')';
   }
 
   function renderClock() {
@@ -712,6 +721,7 @@
   }
 
   function closeSheets() {
+    aioScreen = false;
     setClass($('apps'), 'open', false);
     setClass($('settings'), 'open', false);
     setClass($('shelfedit'), 'open', false);
@@ -728,7 +738,21 @@
 
   // MARK: - Home Settings
 
+  var aioScreen = false, aioEdit = '', aioResults = [];
+
+  function aioMenuRows() {
+    var host = Prefs.aioUrl();
+    return [
+      {label: tr('AIO server'), value: host || tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('url'); }},
+      {label: tr('Username'), value: Prefs.aioUser() || tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('user'); }},
+      {label: tr('Password'), value: Prefs.aioPassword() ? '••••' : tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('password'); }},
+      {label: tr('Search and request'), value: '›', step: function (d) { if (d >= 0) openAioSearch(); }},
+      {label: tr('Test connection'), value: '›', step: function (d) { if (d >= 0) testAio(); }}
+    ];
+  }
+
   function settingRows() {
+    if (aioScreen) return aioMenuRows();
     var unit = Prefs.temperature(), theme = Prefs.theme();
     var auto = tr('Automatic'), picked = pickedLanguage();
     var rows = [
@@ -759,6 +783,8 @@
           step: function () { if (Prefs.quotes()) { Prefs.setCoin(i, !Prefs.coin(i)); Data.settingsChanged(); } }});
       })(i);
     }
+    rows.push({label: tr('AIO Media'), value: Prefs.aioUrl() ? Prefs.aioUrl().replace(/^https?:\/\//, '') : tr('Not set'), opens: true, aio: true,
+      step: function (d) { if (d >= 0) { aioScreen = true; st.row = 0; renderSettings(); } }});
     rows.push({label: tr('TMDB key'), value: Prefs.tmdbKey().length >= 4 ? '•••• ' + Prefs.tmdbKey().slice(-4) : tr('Not set'), opens: true, tmdb: true,
       step: function (d) { if (d >= 0) openKey(); }});
     var sv = Data.services();
@@ -792,7 +818,7 @@
     box.innerHTML = '';
     var title = el('div', 'title', box);
     sym('settings', title);
-    title.appendChild(document.createTextNode(tr('Home Settings')));
+    title.appendChild(document.createTextNode(tr(aioScreen ? 'AIO Media' : 'Home Settings')));
     var list = el('div', 'list', box), holder = el('div', 'rows', list);
     rowsNow = settingRows();
     list.style.height = Math.min(rowsNow.length, 7) * 78 + 'px';
@@ -991,6 +1017,119 @@
     if (st.city === 0) openField('citypick');
     else if (st.city === 1) searchCity();
     else closeCities(true);
+  }
+
+  // MARK: - AIO media manager (typed on the TV)
+
+  function aioSheetRows() { return 2 + aioResults.length; }
+
+  function openAioField(which) {
+    aioEdit = which;
+    aioResults = [];
+    st.aio = 0;
+    renderAioSheet();
+  }
+
+  function openAioSearch() {
+    aioEdit = 'search';
+    aioResults = [];
+    st.aio = 0;
+    renderAioSheet();
+  }
+
+  function renderAioSheet() {
+    var box = $('keypick').firstChild, old = fieldOf('keypick'), typed = old && aioEdit ? old.value : '';
+    var keep = st.zone === Z.AIO ? st.aio : 0;
+    var labels = {url: tr('AIO server'), user: tr('Username'), password: tr('Password'), search: tr('Search and request')};
+    var current = aioEdit === 'url' ? Prefs.aioUrl() : aioEdit === 'user' ? Prefs.aioUser() : '';
+    box.innerHTML = '';
+    el('div', 'title', box, labels[aioEdit] || tr('AIO Media'));
+    var list = el('div', 'list', box), holder = el('div', 'rows', list);
+    list.style.height = Math.min(aioSheetRows(), 7) * 78 + 'px';
+    var field = textField(holder, Z.AIO, typed || current, aioEdit === 'search' ? tr('Type a title') : labels[aioEdit], labels[aioEdit] || '');
+    if (aioEdit === 'password') field.type = 'password';
+    var action = el('div', 'row', holder, aioEdit === 'search' ? tr('Search') : tr('Save'));
+    sym('chevron_right', el('span', 'value', action));
+    hover(action, Z.AIO, 1);
+    for (var i = 0; i < aioResults.length; i++) {
+      hover(el('div', 'row', holder, aioResults[i].title), Z.AIO, 2 + i);
+    }
+    setClass($('settings'), 'open', false);
+    setClass($('keypick'), 'open', true);
+    st.zone = Z.AIO;
+    st.aio = Math.max(0, Math.min(aioSheetRows() - 1, keep));
+    if (st.aio === 0) openField('keypick');
+    else closeField('keypick');
+    updateFocus();
+  }
+
+  function activateAioField() {
+    if (st.aio === 0) openField('keypick');
+    else if (st.aio === 1) {
+      if (aioEdit === 'search') runAioSearch();
+      else saveAioField();
+    } else if (aioResults[st.aio - 2]) requestAio(aioResults[st.aio - 2]);
+  }
+
+  function saveAioField() {
+    var f = fieldOf('keypick'), value = f ? f.value : '';
+    if (aioEdit === 'url') Prefs.set('aioUrl', value.replace(/\s+/g, '').replace(/\/+$/, ''));
+    else if (aioEdit === 'user') Prefs.set('aioUser', value.replace(/^\s+|\s+$/g, ''));
+    else if (aioEdit === 'password') Prefs.set('aioPassword', value);
+    Prefs.set('aioToken', '');
+    closeAioField(true);
+    Data.refresh();
+    renderTop();
+  }
+
+  function runAioSearch() {
+    var f = fieldOf('keypick'), q = f ? f.value : '';
+    Data.searchTitles(q, function (err, rows) {
+      if (st.zone !== Z.AIO) return;
+      if (err) { toast(err.message); return; }
+      aioResults = rows || [];
+      if (!aioResults.length) { toast(tr('No titles found.')); return; }
+      st.aio = 2;
+      renderAioSheet();
+    });
+  }
+
+  function requestAio(hit) {
+    if (!hit.canRequest) { toast(tr('Already in your library.')); return; }
+    Data.requestTitle(hit.kind, hit.mediaId || hit.id, function (err) {
+      toast(err ? err.message : tr('Requested. It will show up in Recently added.'));
+      if (!err) Data.refresh();
+    });
+  }
+
+  function testAio() {
+    toast(tr('Checking…'));
+    Data.ping(function (err, trending, recent) {
+      toast(err ? err.message : trf('Signed in. {trending} trending, {recent} recently added.', {trending: trending, recent: recent}));
+      if (!err) { Data.refresh(); renderTop(); renderCards(); }
+    });
+  }
+
+  function closeAioField() {
+    closeField('keypick');
+    setClass($('keypick'), 'open', false);
+    aioResults = [];
+    setClass($('settings'), 'open', true);
+    st.zone = Z.SETTINGS;
+    renderSettings();
+    updateFocus();
+  }
+
+  function playerApp() {
+    for (var i = 0; i < apps.length; i++) {
+      var id = (apps[i].id || '').toLowerCase(), title = (apps[i].title || '').toLowerCase();
+      if (id.indexOf('jellyfin') >= 0 || title.indexOf('jellyfin') >= 0) return apps[i];
+    }
+    for (var j = 0; j < apps.length; j++) {
+      var id2 = (apps[j].id || '').toLowerCase(), title2 = (apps[j].title || '').toLowerCase();
+      if (id2.indexOf('plex') >= 0 || title2.indexOf('plex') >= 0) return apps[j];
+    }
+    return null;
   }
 
   // MARK: - TMDB key: typed on the TV, so builds without one (the releases) get the picks too; TMDB checks it first
@@ -1245,7 +1384,21 @@
         else openSettings();
         return;
       case Z.CARDS:
-        var p = cards[st.card], app = p && Data.appFor(p.app);
+        var p = cards[st.card];
+        if (p && p.aio && p.canRequest) {
+          Data.requestTitle(p.kind, p.mediaId || p.id, function (err) {
+            toast(err ? err.message : tr('Requested. It will show up in Recently added.'));
+            if (!err) { p.canRequest = false; Data.refresh(); }
+          });
+          return;
+        }
+        if (p && p.aio) {
+          var player = playerApp();
+          if (player) launcher(player.id, player.title)();
+          else toast(tr('Install Jellyfin or Plex to play this.'));
+          return;
+        }
+        var app = p && Data.appFor(p.app);
         if (app) launcher(app.id, app.title)();
         return;
       case Z.SHELF:
@@ -1271,6 +1424,9 @@
         return;
       case Z.KEY:
         activateKey();
+        return;
+      case Z.AIO:
+        activateAioField();
         return;
       case Z.ABOUT:
         closeAbout();
@@ -1337,11 +1493,22 @@
       case Z.KEY:
         if (dy) st.key = Math.max(0, Math.min(keyRows() - 1, st.key + dy));
         break;
+      case Z.AIO:
+        if (dy) st.aio = Math.max(0, Math.min(aioSheetRows() - 1, st.aio + dy));
+        break;
     }
     updateFocus();
   }
 
   function back() {
+    if (st.zone === Z.AIO) { closeAioField(false); return; }
+    if (st.zone === Z.SETTINGS && aioScreen) {
+      aioScreen = false;
+      renderSettings();
+      for (var a = 0; a < rowsNow.length; a++) if (rowsNow[a].aio) st.row = a;
+      updateFocus();
+      return;
+    }
     if (st.zone === Z.EDIT) {
       setClass($('shelfedit'), 'open', false);
       openSettings();
@@ -1362,7 +1529,7 @@
   /** The pointer focuses what it's over (the Magic Remote, or a mouse when previewing). */
   function hover(node, zone, index) {
     node.onmouseover = function () {
-      if (saverOn || (sheetOpen() !== (zone === Z.APPS || zone === Z.SETTINGS || zone === Z.EDIT || zone === Z.LANG || zone === Z.CITY || zone === Z.KEY || zone === Z.ABOUT))) return;
+      if (saverOn || (sheetOpen() !== (zone === Z.APPS || zone === Z.SETTINGS || zone === Z.EDIT || zone === Z.LANG || zone === Z.CITY || zone === Z.KEY || zone === Z.AIO || zone === Z.ABOUT))) return;
       if (zone === Z.DRAWER && st.zone !== Z.DRAWER) return;
       if (zone !== Z.DRAWER && st.zone === Z.DRAWER && zone !== Z.SHELF) return;
       if (zone === Z.TOP && index < 3 && !Data.hasKey()) return;   // the tabs are hidden without the picks
@@ -1378,6 +1545,7 @@
       else if (zone === Z.LANG) st.lang = index;
       else if (zone === Z.CITY) st.city = index;
       else if (zone === Z.KEY) st.key = index;
+      else if (zone === Z.AIO) st.aio = index;
       updateFocus();
     };
     node.onclick = function () { node.onmouseover(); activate(); };
@@ -1411,6 +1579,7 @@
 
   /** The screensaver's photos: picks with an app on the TV. */
   function saverPhotos() {
+    if (Data.aioOn()) return Data.showcase().filter(function (p) { return p.backdrop && !p.recent; });
     return Data.showcase().filter(function (p) { return p.backdrop && Data.usable(p.app); });
   }
 
@@ -1420,11 +1589,13 @@
     saverPick = null;
     var s = $('saver');
     s.innerHTML = '';
+    setClass(s, 'amoled', Data.aioOn());
     var a = el('div', 'photo', s), b = el('div', 'photo', s);
     el('div', 'shade', s);
     var clock = el('div', 'clock', s);
     el('div', 'time', clock);
     el('div', 'date', clock);
+    el('div', 'weather', clock);
     el('div', 'title', clock);
     var hint = el('div', 'hint', clock);
     var front = a;
@@ -1433,9 +1604,9 @@
       var p = photos.length ? photos[saverIndex++ % photos.length] : null;
       var back = front === a ? b : a;
       if (p) {
-        back.style.backgroundImage = 'url(' + Data.image(p.backdrop, 'original') + ')';
+        paint(back, p.backdrop, 'original');
         back.style.webkitTransform = back.style.transform = 'scale(1.0)';
-        clock.children[2].textContent = p.title;
+        clock.children[3].textContent = p.title;
         saverPick = p;
         // With Watch from the screensaver on, OK opens this title's app (any other key only closes).
         var app = Prefs.saverWatch() && Data.appFor(p.app);
@@ -1458,6 +1629,12 @@
     var d = new Date();
     clock.firstChild.textContent = formatDate('format|h:mm', d.getTime());
     clock.children[1].textContent = formatDate('format|EEEE, MMMM d', d.getTime());
+    var w = Data.weather, line = '';
+    if (w && Prefs.weather() && w.temp != null) {
+      line = Data.degrees(w.temp);
+      if (w.max != null && w.min != null) line += '   ' + Data.degrees(w.min) + ' / ' + Data.degrees(w.max);
+    }
+    if (clock.children[2]) clock.children[2].textContent = line;
   }
 
   function hideSaver() {
@@ -1497,9 +1674,13 @@
    * its Cancel or ↑ ↓ leave the field. Samsung's keyboard sends Done as 65376 and Cancel as 65385. True: handled here.
    */
   function typing(k) {
-    var sheet = st.zone === Z.CITY ? 'citypick' : st.zone === Z.KEY ? 'keypick' : '';
+    var sheet = st.zone === Z.CITY ? 'citypick' : (st.zone === Z.KEY || st.zone === Z.AIO) ? 'keypick' : '';
     if (!sheet || !typingIn(sheet)) return false;
-    if (k === TV.keys.ok || k === 65376) { if (st.zone === Z.CITY) searchCity(); else saveKey(); }
+    if (k === TV.keys.ok || k === 65376) {
+      if (st.zone === Z.CITY) searchCity();
+      else if (st.zone === Z.AIO) activateAioField();
+      else saveKey();
+    }
     else if (k === TV.keys.back || k === 27 || k === 65385) { closeField(sheet); updateFocus(); }
     else if (k === TV.keys.up || k === TV.keys.down) { closeField(sheet); move(0, k === TV.keys.up ? -1 : 1); }
     return true;   // anything else types into the field

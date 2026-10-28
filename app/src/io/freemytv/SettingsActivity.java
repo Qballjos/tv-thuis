@@ -150,7 +150,7 @@ public class SettingsActivity extends Activity {
 
     static final class SettingsView extends View implements Choreographer.FrameCallback {
         private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5,
-                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9;
+                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, AIO = 10;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
@@ -204,6 +204,8 @@ public class SettingsActivity extends Activity {
         private int sleepLeft;     // the sleep timer's minutes left, read with the state, not on every frame
         private int whyState = -1;
         private String errorShown;
+        private String aioStatus = "";
+        private boolean aioBusy;
         private final Spoken spoken;
         private long startedAt, lastNanos, pendingAt, lastSky;
         private int w, h;
@@ -457,6 +459,7 @@ public class SettingsActivity extends Activity {
                 case TMDB_KEY: return keyRowIds.length;
                 case PICKS: return picksLabels().length;
                 case PICK_FROM: return Math.min(PICK_VISIBLE, services.size());
+                case AIO: return aioLabels().length;
                 default: return Prefs.KEYS.length;
             }
         }
@@ -481,7 +484,7 @@ public class SettingsActivity extends Activity {
             // On the left: big symbol, title, description.
             float cx = 500 * k;
             Symbols.draw(getContext(), c, "sparkles", cx, 400 * k, 150 * k, 0xEBFFFFFF);
-            c.drawText("Free My TV", cx, 612 * k, title);
+            c.drawText(Ui.tr("TV Thuis"), cx, 612 * k, title);
             c.drawText(Ui.tr("Your TV's home screen and screensaver"), cx, 660 * k, subtitle);
             c.drawText(versionName(getContext()), cx, 704 * k, version);
 
@@ -494,7 +497,7 @@ public class SettingsActivity extends Activity {
         private void drawMain(Canvas c, float seconds) {
             boolean working = busy();
             String busyText = busyText();
-            String mode = freeActive() ? "Free My TV" : Ui.tr("Original");
+            String mode = freeActive() ? Ui.tr("TV Thuis") : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
                     Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
@@ -683,9 +686,9 @@ public class SettingsActivity extends Activity {
 
         private static String versionName(Context c) {
             try {
-                return "Free My TV " + c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
+                return c.getString(R.string.app_name) + " " + c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
             } catch (android.content.pm.PackageManager.NameNotFoundException e) {
-                return "Free My TV";
+                return "TV Thuis";
             }
         }
 
@@ -755,6 +758,8 @@ public class SettingsActivity extends Activity {
                                 pickScroll = 0;   // the Picks screen has two rows
                                 focus = 1;
                                 screen = PICKS;
+                            } else if (screen == AIO) {
+                                closeAioScreen();
                             } else {
                                 focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
                                         : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : 0;
@@ -803,6 +808,7 @@ public class SettingsActivity extends Activity {
             l.add("Ethereum");
             l.add("Solana");
             if (dollar()) l.add(Ui.tr("Dollar"));
+            l.add(Ui.tr("AIO Media"));
             l.add(Ui.tr("TMDB key"));
             l.add(Ui.tr("Updates"));
             return l.toArray(new String[0]);
@@ -815,6 +821,11 @@ public class SettingsActivity extends Activity {
 
         private int keyRow() {
             return updatesRow() - 1;
+        }
+
+        /** The media-manager row, just above the TMDB key. */
+        private int aioRow() {
+            return keyRow() - 1;
         }
 
         /** The TMDB key row: "Not set", or the key's last 4 characters (all that's ever shown of it). */
@@ -852,9 +863,11 @@ public class SettingsActivity extends Activity {
             v[PLAYING_ROW] = onOff(Prefs.nowPlaying());
             v[QUOTES_ROW] = onOff(Prefs.quotes());
             // No quotes widget, nowhere to show prices: the coins read as off (and stay locked) until it is back on.
-            for (int i = COIN_ROWS; i < v.length - 2; i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
-            v[v.length - 2] = keyValue();
-            v[v.length - 1] = updatesValue();
+            for (int i = COIN_ROWS; i < aioRow(); i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
+            String host = Prefs.aioUrl();
+            v[aioRow()] = host.isEmpty() ? Ui.tr("Not set") : host.replaceFirst("^https?://", "");
+            v[keyRow()] = keyValue();
+            v[updatesRow()] = updatesValue();
             return v;
         }
 
@@ -900,7 +913,7 @@ public class SettingsActivity extends Activity {
                 whyScroll = pickScroll;
                 for (int r = 0; r < n; r++) {
                     String need = need(r);
-                    whyRows[r] = screen == HOME_SETTINGS && pickScroll + r >= COIN_ROWS && pickScroll + r < keyRow() && !Prefs.quotes()
+                    whyRows[r] = screen == HOME_SETTINGS && pickScroll + r >= COIN_ROWS && pickScroll + r < aioRow() && !Prefs.quotes()
                             ? Ui.tr("Turn on the Quotes widget to pick its coins.")
                             : need == null ? null : Capabilities.missing(getContext(), need);
                 }
@@ -1011,11 +1024,29 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] listLabels() {
+            if (screen == AIO) return aioLabels();
             return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : screen == PICKS ? picksLabels() : settingLabels();
         }
 
         private String[] listValues() {
+            if (screen == AIO) return aioValues();
             return screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : screen == PICKS ? picksValues() : settingValues();
+        }
+
+        private String[] aioLabels() {
+            return new String[] {Ui.tr("AIO server"), Ui.tr("Username"), Ui.tr("Password"),
+                    Ui.tr("Search and request"), Ui.tr("Test connection")};
+        }
+
+        private String[] aioValues() {
+            String host = Prefs.aioUrl();
+            return new String[] {
+                    host.isEmpty() ? Ui.tr("Not set") : host,
+                    Prefs.aioUser().isEmpty() ? Ui.tr("Not set") : Prefs.aioUser(),
+                    Prefs.aioPasswordSet() ? "••••" : Ui.tr("Not set"),
+                    "›",
+                    aioBusy ? Ui.tr("Checking…") : (aioStatus.isEmpty() ? "›" : aioStatus)
+            };
         }
 
         private static String onOff(boolean on) {
@@ -1145,7 +1176,7 @@ public class SettingsActivity extends Activity {
                     break;
                 case QUOTES_ROW: Prefs.setQuotes(!Prefs.quotes()); break;
                 default:
-                    if (row >= keyRow() || !Prefs.quotes()) return;   // the key and Updates act on OK only
+                    if (row >= aioRow() || !Prefs.quotes()) return;   // AIO, the key and Updates act on OK only
                     Prefs.setCoin(row - COIN_ROWS, !Prefs.coin(row - COIN_ROWS));
                     break;
             }
@@ -1211,6 +1242,151 @@ public class SettingsActivity extends Activity {
         /** A check or an install on its way or under way: poll reads the file more often. */
         private boolean updating() {
             return Updates.busy(updates) || System.currentTimeMillis() - Math.max(checkAskedAt, installAskedAt) < 10_000;
+        }
+
+        // MARK: - AIO media manager
+
+        private void openAioScreen() {
+            screen = AIO;
+            pickScroll = 0;
+            focus = 0;
+        }
+
+        private void closeAioScreen() {
+            int row = aioRow(), rows = settingLabels().length;
+            pickScroll = Math.max(0, Math.min(row - 3, rows - Math.min(SETTINGS_VISIBLE, rows)));
+            focus = row - pickScroll;
+            screen = HOME_SETTINGS;
+        }
+
+        private void activateAio() {
+            switch (focus) {
+                case 0: editAio(0); break;
+                case 1: editAio(1); break;
+                case 2: editAio(2); break;
+                case 3: searchAio(); break;
+                default: testAio();
+            }
+        }
+
+        private void editAio(int which) {
+            EditText field = new EditText(activity);
+            field.setSingleLine(true);
+            String title;
+            if (which == 0) {
+                title = Ui.tr("AIO server");
+                field.setText(Prefs.aioUrl());
+                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+            } else if (which == 1) {
+                title = Ui.tr("Username");
+                field.setText(Prefs.aioUser());
+                field.setInputType(InputType.TYPE_CLASS_TEXT);
+            } else {
+                title = Ui.tr("Password");
+                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            }
+            field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(title)
+                    .setView(field)
+                    .setPositiveButton(Ui.tr("Save"), (d, w) -> saveAio(which, field.getText().toString()))
+                    .setNegativeButton(Ui.tr("Cancel"), null)
+                    .create();
+            field.setOnEditorActionListener((v, action, event) -> {
+                dialog.dismiss();
+                saveAio(which, field.getText().toString());
+                return true;
+            });
+            dialog.show();
+        }
+
+        private void saveAio(int which, String value) {
+            if (which == 0) Prefs.setAioUrl(value);
+            else if (which == 1) Prefs.setAioUser(value);
+            else Prefs.setAioPassword(value);
+            aioStatus = "";
+            Recs.get(getContext()).refreshIfStale();
+            invalidate();
+        }
+
+        private void testAio() {
+            if (aioBusy) return;
+            aioBusy = true;
+            aioStatus = "";
+            invalidate();
+            new Thread(() -> {
+                String msg = Aio.test();
+                handler.post(() -> {
+                    aioBusy = false;
+                    aioStatus = msg;
+                    Recs.get(getContext()).refreshIfStale();
+                    invalidate();
+                });
+            }, "aio-test").start();
+        }
+
+        private void searchAio() {
+            EditText field = new EditText(activity);
+            field.setSingleLine(true);
+            field.setHint(Ui.tr("Type a title"));
+            field.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
+            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle(Ui.tr("Search and request"))
+                    .setView(field)
+                    .setPositiveButton(Ui.tr("Search"), (d, w) -> runAioSearch(field.getText().toString()))
+                    .setNegativeButton(Ui.tr("Cancel"), null)
+                    .create();
+            field.setOnEditorActionListener((v, action, event) -> {
+                dialog.dismiss();
+                runAioSearch(field.getText().toString());
+                return true;
+            });
+            dialog.show();
+        }
+
+        private void runAioSearch(String query) {
+            aioBusy = true;
+            invalidate();
+            new Thread(() -> {
+                try {
+                    java.util.List<Aio.Hit> hits = Aio.search(query);
+                    handler.post(() -> {
+                        aioBusy = false;
+                        invalidate();
+                        if (hits.isEmpty()) {
+                            Toast.makeText(getContext(), Ui.tr("No titles found."), Toast.LENGTH_LONG).show();
+                            return;
+                        }
+                        String[] labels = new String[hits.size()];
+                        for (int i = 0; i < hits.size(); i++) labels[i] = hits.get(i).title;
+                        new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                                .setTitle(Ui.tr("Search and request"))
+                                .setItems(labels, (d, which) -> requestHit(hits.get(which)))
+                                .setNegativeButton(Ui.tr("Cancel"), null)
+                                .show();
+                    });
+                } catch (Exception e) {
+                    String msg = e.getMessage() == null ? e.toString() : e.getMessage();
+                    handler.post(() -> {
+                        aioBusy = false;
+                        aioStatus = msg;
+                        invalidate();
+                    });
+                }
+            }, "aio-search").start();
+        }
+
+        private void requestHit(Aio.Hit hit) {
+            if (!hit.canRequest) {
+                Toast.makeText(getContext(), Ui.tr("Already in your library."), Toast.LENGTH_LONG).show();
+                return;
+            }
+            new Thread(() -> {
+                String err = Aio.request(hit.kind, hit.id);
+                handler.post(() -> Toast.makeText(getContext(),
+                        err == null ? Ui.tr("Requested. It will show up in Recently added.") : err,
+                        Toast.LENGTH_LONG).show());
+            }, "aio-request").start();
         }
 
         // MARK: - TMDB key (from a phone through KeyPage's QR code, or typed with the remote)
@@ -1722,7 +1898,8 @@ public class SettingsActivity extends Activity {
             String[] labels = listLabels();
             String[] values = listValues();
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            c.drawText(keys ? Ui.tr("Remote Buttons") : screen == POWER ? Ui.tr("Sleep Timer") : screen == PICKS ? Ui.tr("Picks") : Ui.tr("Home Settings"),
+            c.drawText(keys ? Ui.tr("Remote Buttons") : screen == POWER ? Ui.tr("Sleep Timer") : screen == PICKS ? Ui.tr("Picks")
+                    : screen == AIO ? Ui.tr("AIO Media") : Ui.tr("Home Settings"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             float pitch = LIST_ROW_H + LIST_ROW_GAP;
             int rows = keys ? labels.length : rowCount(), from = keys ? 0 : pickScroll;
@@ -1819,6 +1996,11 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (screen == HOME_SETTINGS && pickScroll + focus == updatesRow()) {
                 updateNow();
+                return;
+            } else if (screen == HOME_SETTINGS && pickScroll + focus == aioRow()) {
+                openAioScreen();
+            } else if (screen == AIO) {
+                activateAio();
                 return;
             } else if (screen == HOME_SETTINGS && pickScroll + focus == keyRow()) {
                 openKeyScreen();

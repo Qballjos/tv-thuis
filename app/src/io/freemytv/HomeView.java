@@ -101,6 +101,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final int L_INK = 0xFF1D1D1F, L_DIM = 0xFF6E6E73, L_FAINT = 0xFF8E8E93;
     private static String[] tabs;
     private static int tabsGeneration = -1;
+    private static int tabsMode = -1;
     private static final String[] TAB_KIND = {null, "movie", "tv"};
     private static final int Z_TOP = 4, Z_CARDS = 5;
 
@@ -533,9 +534,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The tab names, made again only when the language changes (they are drawn on every frame). */
     private static String[] tabs() {
-        if (tabsGeneration != Ui.generation) {
-            tabs = new String[] {Ui.tr("Explore"), Ui.tr("Movies"), Ui.tr("Shows")};
+        int mode = Aio.configured() ? 1 : 0;
+        if (tabsGeneration != Ui.generation || tabsMode != mode) {
+            tabs = mode == 1
+                    ? new String[] {Ui.tr("Recently added"), Ui.tr("Movies"), Ui.tr("Shows")}
+                    : new String[] {Ui.tr("Explore"), Ui.tr("Movies"), Ui.tr("Shows")};
             tabsGeneration = Ui.generation;
+            tabsMode = mode;
         }
         return tabs;
     }
@@ -2459,6 +2464,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         } else if (zone == Z_HERO) {
             Recs.Pick p = currentPick();
             if (p == null || p.pkg == null) return;
+            if (openAio(p, heroButton)) return;
             it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
             r = heroButton;
         } else if (zone == Z_STATUS) {
@@ -2479,6 +2485,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         } else if (zone == Z_CARDS) {
             Recs.Pick p = cardIndex < cards.size() ? cards.get(cardIndex) : null;
             if (p == null || p.pkg == null) return;
+            if (openAio(p, cardRects[cardIndex])) return;
             it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
             r = cardRects[cardIndex];
         } else {
@@ -2505,6 +2512,39 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
+    }
+
+    /** A media-manager title: OK requests it, or opens Jellyfin or Plex. True when this pick was handled. */
+    private boolean openAio(Recs.Pick p, RectF r) {
+        if (p == null || !p.aio) return false;
+        click.open();
+        if (p.canRequest) {
+            showToast(Ui.tr("Requesting…"));
+            final String kind = p.kind;
+            final int id = p.id;
+            LOADER.execute(() -> {
+                String err = Aio.request(kind, id);
+                handler.post(() -> {
+                    showToast(err == null ? Ui.tr("Requested. It will show up in Recently added.") : err);
+                    if (err == null) {
+                        p.canRequest = false;
+                        p.meta = Ui.tr("Requested");
+                        recs.refreshIfStale();
+                    }
+                });
+            });
+            return true;
+        }
+        String pkg = Aio.playerPackage(activity);
+        if (pkg == null) {
+            showToast(Ui.tr("Install Jellyfin or Plex to play this."));
+            return true;
+        }
+        HomeApps.Item it = HomeApps.app(pkg, pkg.contains("plex") ? "Plex" : "Jellyfin", null);
+        boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
+                Math.round(r.width()), Math.round(r.height()));
+        if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
+        return true;
     }
 
     // MARK: - Holding OK: All Apps puts the app on the shelf or takes it off; on the shelf, the app is lifted to move
