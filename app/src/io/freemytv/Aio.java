@@ -44,12 +44,30 @@ final class Aio {
 
     /** What changed the list: the address and the account, so a new login fetches again. */
     static String identity() {
-        return Prefs.aioUrl() + "\n" + Prefs.aioUser() + "\n" + (Prefs.aioToken().isEmpty() ? "0" : "1");
+        return Prefs.aioUrl() + "\n" + Prefs.aioUser() + "\n" + (Prefs.aioToken().isEmpty() ? "0" : "1")
+                + "\n" + Prefs.jellyfinUrl() + "\n" + Integer.toHexString(Prefs.jellyfinKey().hashCode());
     }
 
-    /** Jellyfin or Plex, whichever is installed. */
+    /** Opens this Jellyfin item in Wholphin. False when Wholphin isn't the player, or the card has no item id. */
+    static boolean viewInWholphin(Context context, String pkg, String itemId) {
+        if (context == null || itemId == null || itemId.isEmpty() || pkg == null || !pkg.contains("wholphin")) return false;
+        try {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+            intent.setData(android.net.Uri.parse("wholphin://view?itemId=" + android.net.Uri.encode(itemId)));
+            intent.setPackage(pkg);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            return true;
+        } catch (RuntimeException e) {
+            AppLog.w("wholphin: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+            return false;
+        }
+    }
+
+    /** Wholphin, then the official Jellyfin app, then Plex. */
     static String playerPackage(Context c) {
-        String[] pkgs = {"org.jellyfin.androidtv", "org.jellyfin.androidtv.firetv", "com.plexapp.android"};
+        String[] pkgs = {"com.github.damontecres.wholphin", "com.github.damontecres.wholphin.debug",
+                "org.jellyfin.androidtv", "org.jellyfin.androidtv.firetv", "com.plexapp.android"};
         PackageManager pm = c.getPackageManager();
         for (String pkg : pkgs) {
             try {
@@ -132,6 +150,7 @@ final class Aio {
         c.setReadTimeout(20000);
         c.setInstanceFollowRedirects(true);
         if (onServer(url)) c.setRequestProperty("Authorization", "Bearer " + Prefs.aioToken());
+        else if (onJellyfin(url) && !Prefs.jellyfinKey().isEmpty()) c.setRequestProperty("X-Emby-Token", Prefs.jellyfinKey());
         return c;
     }
 
@@ -154,15 +173,17 @@ final class Aio {
             p.aio = true;
             p.recent = recent;
             p.kind = kind(row.optString("mediaType", recent ? "movie" : "movie"));
-            p.id = row.optInt("mediaId", row.optInt("id", i + 1));
+            p.id = row.optInt("mediaId", 0);
             if (p.id == 0) p.id = i + 1;
+            p.itemId = libraryId(row);
             p.title = title;
             p.canRequest = !recent && (row.has("can_request") ? row.optBoolean("can_request") : row.optBoolean("canRequest"));
             String detail = row.optString("detail", "");
             String status = row.optString("status", "");
             p.meta = status.isEmpty() ? detail : (detail.isEmpty() ? statusLabel(status) : detail + " · " + statusLabel(status));
             p.imageUrl = imageUrl(row.optString("poster", ""));
-            p.backdrop = "aio-" + (recent ? "r-" : "t-") + p.kind + "-" + p.id;
+            String token = p.itemId != null ? p.itemId : p.kind + "-" + p.id;
+            p.backdrop = "aio-" + (recent ? "r-" : "t-") + token;
             p.poster = p.backdrop;
             p.detailed = true;
             p.app = p.canRequest ? "request" : "library";
@@ -258,6 +279,123 @@ final class Aio {
     private static boolean onServer(String url) {
         String base = Prefs.aioUrl();
         return !base.isEmpty() && url != null && url.startsWith(base);
+    }
+
+    private static boolean onJellyfin(String url) {
+        String base = Prefs.jellyfinUrl();
+        return !base.isEmpty() && url != null && url.startsWith(base);
+    }
+
+    /** Jellyfin id on a library row: the id itself, or the id= in the item's web address. */
+    private static String libraryId(JSONObject row) {
+        String id = row.optString("id", "");
+        if (!uuid(id)) {
+            String url = row.optString("url", "");
+            int q = url.indexOf("id=");
+            if (q >= 0) {
+                id = url.substring(q + 3);
+                int cut = id.indexOf('&');
+                if (cut >= 0) id = id.substring(0, cut);
+                cut = id.indexOf('#');
+                if (cut >= 0) id = id.substring(0, cut);
+            }
+        }
+        return uuid(id) ? id : null;
+    }
+
+    private static boolean uuid(String id) {
+        if (id == null) return false;
+        String s = id.replace("-", "");
+        if (s.length() != 32) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F')) return false;
+        }
+        return true;
+    }
+
+    /** In-progress and next-up items from Jellyfin, in that order. No-op until a server and API key are saved. */
+    static void resume(List<Recs.Pick> into) throws IOException {
+        if (Prefs.jellyfinUrl().isEmpty() || Prefs.jellyfinKey().isEmpty()) return;
+        JSONArray users = jfList("/Users");
+        if (users.length() == 0) return;
+        String user = users.optJSONObject(0) == null ? "" : users.optJSONObject(0).optString("Id", "");
+        if (!uuid(user)) return;
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        addResume(into, seen, jfItems("/Users/" + user + "/Items/Resume?Limit=16&Fields=ProductionYear,SeriesName"));
+        addResume(into, seen, jfItems("/Shows/NextUp?userId=" + user + "&Limit=12&Fields=ProductionYear,SeriesName"));
+    }
+
+    private static void addResume(List<Recs.Pick> into, java.util.HashSet<String> seen, JSONArray items) {
+        String base = Prefs.jellyfinUrl();
+        for (int i = 0; i < items.length() && into.size() < 24; i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) continue;
+            String id = item.optString("Id", "");
+            if (!uuid(id) || !seen.add(id)) continue;
+            String name = item.optString("Name", "").trim();
+            String series = item.optString("SeriesName", "").trim();
+            String type = item.optString("Type", "");
+            if (name.isEmpty() && series.isEmpty()) continue;
+            Recs.Pick p = new Recs.Pick();
+            p.aio = true;
+            p.resume = true;
+            p.itemId = id;
+            p.id = i + 1;
+            p.canRequest = false;
+            p.detailed = true;
+            p.app = "library";
+            p.pkg = "aio";
+            boolean episode = "Episode".equals(type);
+            p.kind = episode || "Series".equals(type) ? "tv" : "movie";
+            p.title = episode && !series.isEmpty() ? series : name;
+            int season = item.optInt("ParentIndexNumber", 0), episodeNo = item.optInt("IndexNumber", 0);
+            if (episode && season > 0 && episodeNo > 0) {
+                String code = "S" + season + "E" + episodeNo;
+                p.meta = name.isEmpty() || name.equals(p.title) ? code : code + " · " + name;
+            } else {
+                int year = item.optInt("ProductionYear", 0);
+                p.meta = year > 0 ? Integer.toString(year) : "";
+            }
+            String imageId = item.optString("SeriesId", "");
+            if (!uuid(imageId)) imageId = id;
+            p.imageUrl = base + "/Items/" + imageId + "/Images/Primary?maxWidth=780";
+            p.backdrop = "aio-c-" + id;
+            p.poster = p.backdrop;
+            into.add(p);
+        }
+    }
+
+    private static JSONArray jfList(String path) throws IOException {
+        String text = jf(path).trim();
+        try {
+            return text.startsWith("[") ? new JSONArray(text) : new JSONArray();
+        } catch (org.json.JSONException e) {
+            throw new IOException(e.getMessage());
+        }
+    }
+
+    private static JSONArray jfItems(String path) throws IOException {
+        String text = jf(path).trim();
+        try {
+            if (text.startsWith("[")) return new JSONArray(text);
+            JSONArray items = new JSONObject(text).optJSONArray("Items");
+            return items == null ? new JSONArray() : items;
+        } catch (org.json.JSONException e) {
+            throw new IOException(e.getMessage());
+        }
+    }
+
+    private static String jf(String path) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) new URL(Prefs.jellyfinUrl() + path).openConnection();
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(20000);
+        c.setRequestProperty("X-Emby-Token", Prefs.jellyfinKey());
+        c.setRequestProperty("Accept", "application/json");
+        int code = c.getResponseCode();
+        String text = read(code >= 400 ? c.getErrorStream() : c.getInputStream());
+        if (code >= 400) throw new IOException("HTTP " + code);
+        return text;
     }
 
     private static String read(InputStream in) throws IOException {

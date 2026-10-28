@@ -56,7 +56,9 @@ final class Recs {
         boolean detailed;
         boolean aio;             // from the household media manager, not TMDB
         boolean recent;          // recently added in the library (aio); otherwise a trending title
+        boolean resume;          // continue watching (Jellyfin): OK opens this item in Wholphin
         boolean canRequest;      // missing on the server: OK asks the media manager for it
+        String itemId;           // Jellyfin item id, when the card can open that title
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
 
@@ -74,7 +76,7 @@ final class Recs {
     private static final int ANIMATION = 16;
     private static final long LIST_EVERY = 6 * 3600_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 6;
+    private static final int CACHE_VERSION = 7;
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
     /** Service name on TMDB (part of the name, lowercase) → TV app (HomeApps key, package). */
     private static final String[][] SERVICES = {
@@ -333,18 +335,24 @@ final class Recs {
         return out;
     }
 
-    /** Media manager: Explore is recently added, Movies and Shows are this week's trending. */
+    /**
+     * Media manager tabs: "resume" keeps Jellyfin's order (what you were watching), "recent" is newly added,
+     * "movie" and "tv" are this week's trending. null is recently added.
+     */
     private List<Pick> aioNow(String kind) {
+        boolean resume = "resume".equals(kind);
         List<Pick> list = new ArrayList<>();
         for (Pick p : picks) {
             if (!p.aio) continue;
-            if (kind == null) { if (p.recent) list.add(p); }
-            else if (!p.recent && kind.equals(p.kind)) list.add(p);
+            if (resume) { if (p.resume) list.add(p); }
+            else if ("recent".equals(kind) || kind == null) { if (p.recent && !p.resume) list.add(p); }
+            else if (!p.recent && !p.resume && kind.equals(p.kind)) list.add(p);
         }
+        int cards = Prefs.cards();
+        if (resume) return list.size() > cards ? new ArrayList<>(list.subList(0, cards)) : list;
         List<Pick> out = new ArrayList<>();
         if (list.isEmpty()) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
-        int cards = Prefs.cards();
         long hour = System.currentTimeMillis() / 3600_000L;
         for (int i = 0; i < list.size() && out.size() < cards; i++) {
             Pick p = list.get((int) ((hour * cards + i) % list.size()));
@@ -462,7 +470,7 @@ final class Recs {
         if (Aio.configured()) {
             java.util.Set<String> seen = new java.util.HashSet<>();
             for (Pick p : picks) {
-                if (p.aio && !p.recent && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
+                if (p.aio && !p.recent && !p.resume && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
             }
             return out;
         }
@@ -525,7 +533,8 @@ final class Recs {
     List<Pick> wanted() {
         List<Pick> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
-        for (String kind : new String[] {null, "movie", "tv"}) {
+        String[] kinds = Aio.configured() ? new String[] {"resume", "recent", "movie", "tv"} : new String[] {null, "movie", "tv"};
+        for (String kind : kinds) {
             for (Pick p : now(kind)) if (seen.add(key(p))) out.add(p);
         }
         return out;
@@ -533,7 +542,7 @@ final class Recs {
 
     /** Movies and shows are numbered separately on TMDB: a pick is identified by type + number. */
     static String key(Pick p) {
-        return p.kind + ":" + p.id;
+        return p.itemId != null && !p.itemId.isEmpty() ? p.kind + ":" + p.itemId : p.kind + ":" + p.id;
     }
 
     private void notifyListeners() {
@@ -546,9 +555,16 @@ final class Recs {
         if (Aio.configured()) {
             List<Pick> trending = new ArrayList<>(), recent = new ArrayList<>();
             Aio.fill(trending, recent);
+            List<Pick> resume = new ArrayList<>();
+            try {
+                Aio.resume(resume);
+            } catch (Exception e) {
+                AppLog.w("continue watching: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+            }
             List<Pick> list = new ArrayList<>();
             list.addAll(trending);
             list.addAll(recent);
+            list.addAll(resume);
             picks = list;
             period = p;
             listAt = System.currentTimeMillis();
@@ -1159,7 +1175,8 @@ final class Recs {
                         .put("poster", p.poster == null ? "" : p.poster).put("link", p.link == null ? "" : p.link)
                         .put("imageUrl", p.imageUrl == null ? "" : p.imageUrl)
                         .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
-                        .put("detailed", p.detailed).put("aio", p.aio).put("recent", p.recent).put("canRequest", p.canRequest));
+                        .put("detailed", p.detailed).put("aio", p.aio).put("recent", p.recent).put("resume", p.resume)
+                        .put("canRequest", p.canRequest).put("itemId", p.itemId == null ? "" : p.itemId));
             }
             SharedPreferences.Editor e = cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
                     .putString("language", listLanguage)
@@ -1192,7 +1209,9 @@ final class Recs {
             p.detailed = o.optBoolean("detailed");
             p.aio = o.optBoolean("aio");
             p.recent = o.optBoolean("recent");
+            p.resume = o.optBoolean("resume");
             p.canRequest = o.optBoolean("canRequest");
+            p.itemId = o.optString("itemId").isEmpty() ? null : o.optString("itemId");
             out.add(p);
         }
         return out;

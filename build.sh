@@ -75,6 +75,8 @@ final class Config {
     static final String AIO_URL = "$(prop aio_url '')";
     static final String AIO_USER = "$(prop aio_user '')";
     static final String AIO_PASSWORD = "$(prop aio_password '')";
+    static final String JELLYFIN_URL = "$(prop jellyfin_url '')";
+    static final String JELLYFIN_KEY = "$(prop jellyfin_key '')";
     static final String TMDB_REGION = "$REGION";
     static final String LATITUDE = "$LAT";
     static final String LONGITUDE = "$LON";

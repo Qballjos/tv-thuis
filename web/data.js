@@ -72,6 +72,10 @@ var Prefs = (function () {
     aioUser: function () { return String(pick('aioUser', CONFIG.aioUser || '')).trim(); },
     aioPassword: function () { return String(pick('aioPassword', CONFIG.aioPassword || '')); },
     aioToken: function () { return String(pick('aioToken', '') || ''); },
+    jellyfinUrl: function () {
+      return String(pick('jellyfinUrl', CONFIG.jellyfinUrl || '') || '').replace(/\s+/g, '').replace(/\/+$/, '');
+    },
+    jellyfinKey: function () { return String(pick('jellyfinKey', CONFIG.jellyfinKey || '') || '').replace(/^\s+|\s+$/g, ''); },
     /** True when the key in use was typed on the TV (Remove takes it back to config.properties'). */
     tmdbKeyOnTV: function () { return v.tmdbKey !== undefined; },
     setCity: function (name, lat, lon) { v.city = name; v.latitude = lat; v.longitude = lon; save(); this.version++; },
@@ -364,9 +368,16 @@ var Data = (function () {
 
   function sourceStamp() {
     var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (CONFIG.hideAnimation ? ':no-animation' : '')
-        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser();
+        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey());
     for (var i = 0; i < SERVICES.length; i++) s += usable(SERVICES[i][1]) ? '1' : '0';
     return s;
+  }
+
+  function hash(s) {
+    var h = 0;
+    s = String(s || '');
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return h;
   }
 
   function franchise(title) {
@@ -384,9 +395,11 @@ var Data = (function () {
       for (var a = 0; a < picks.length; a++) {
         var item = picks[a];
         if (!item.aio) continue;
-        if (kind === null) { if (item.recent) list.push(item); }
-        else if (!item.recent && item.kind === kind) list.push(item);
+        if (kind === 'resume') { if (item.resume) list.push(item); }
+        else if (kind === 'recent' || kind === null) { if (item.recent && !item.resume) list.push(item); }
+        else if (!item.recent && !item.resume && item.kind === kind) list.push(item);
       }
+      if (kind === 'resume') return list.slice(0, Prefs.cards());
       return sliceHour(list);
     }
     if (!KEY) return list;
@@ -510,7 +523,7 @@ var Data = (function () {
     list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, poster: o.poster_path || '', meta: '', app: null, detailed: false});
   }
 
-  function keyOf(p) { return p.kind + ':' + p.id; }
+  function keyOf(p) { return p.itemId ? p.kind + ':' + p.itemId : p.kind + ':' + p.id; }
 
   function alternate(out, seen, a, b, max) {
     for (var i = 0; i < Math.max(a.length, b.length) && out.length < max; i++) {
@@ -576,21 +589,102 @@ var Data = (function () {
     return url.replace('/w92/', '/w780/').replace('/w154/', '/w780/').replace('/w185/', '/w780/').replace('/w342/', '/w780/');
   }
 
+  function isUuid(id) {
+    return /^[0-9a-fA-F]{32}$/.test(String(id || '').replace(/-/g, ''));
+  }
+
+  function libraryId(row) {
+    var id = row.id == null ? '' : String(row.id);
+    if (!isUuid(id)) {
+      var url = String(row.url || ''), q = url.indexOf('id=');
+      if (q >= 0) {
+        id = url.slice(q + 3);
+        var cut = id.search(/[&#]/);
+        if (cut >= 0) id = id.slice(0, cut);
+      }
+    }
+    return isUuid(id) ? id : '';
+  }
+
   function aioPick(row, recent) {
     var kind = (row.mediaType || 'movie').toLowerCase();
     if (kind === 'series' || kind === 'show') kind = 'tv';
     if (kind !== 'tv') kind = 'movie';
-    var id = row.mediaId || row.id || 0;
+    var itemId = libraryId(row);
+    var id = row.mediaId || (itemId ? 0 : row.id) || 0;
     return {
-      aio: true, recent: recent, kind: kind, id: id,
+      aio: true, recent: recent, kind: kind, id: id, itemId: itemId,
       title: row.title || '',
       meta: row.detail || row.status || '',
       poster: aioImage(row.poster || ''),
       backdrop: aioImage(row.poster || ''),
       canRequest: !recent && !!(row.can_request || row.canRequest),
-      mediaType: kind, mediaId: id,
+      mediaType: kind, mediaId: row.mediaId || id,
       detailed: true, app: recent || !(row.can_request || row.canRequest) ? 'library' : 'request'
     };
+  }
+
+  function jfGet(path, done) {
+    var base = Prefs.jellyfinUrl();
+    if (!base || !Prefs.jellyfinKey()) { done(new Error('no jellyfin')); return; }
+    var x = new XMLHttpRequest(), over = false;
+    x.open('GET', base + path, true);
+    x.timeout = 12000;
+    x.setRequestHeader('X-Emby-Token', Prefs.jellyfinKey());
+    x.setRequestHeader('Accept', 'application/json');
+    x.onreadystatechange = function () {
+      if (x.readyState !== 4 || over) return;
+      over = true;
+      if (x.status !== 200) { done(new Error('HTTP ' + x.status)); return; }
+      try { done(null, JSON.parse(x.responseText)); } catch (err) { done(err); }
+    };
+    x.ontimeout = x.onerror = function () { if (!over) { over = true; done(new Error('no connection')); } };
+    x.send();
+  }
+
+  function resumePick(item, n) {
+    var id = item.Id || '', name = item.Name || '', series = item.SeriesName || '', type = item.Type || '';
+    if (!isUuid(id) || (!name && !series)) return null;
+    var episode = type === 'Episode';
+    var kind = episode || type === 'Series' ? 'tv' : 'movie';
+    var title = episode && series ? series : name;
+    var meta = '';
+    if (episode && item.ParentIndexNumber && item.IndexNumber) {
+      var code = 'S' + item.ParentIndexNumber + 'E' + item.IndexNumber;
+      meta = !name || name === title ? code : code + ' · ' + name;
+    } else if (item.ProductionYear) meta = String(item.ProductionYear);
+    var imageId = isUuid(item.SeriesId) ? item.SeriesId : id;
+    var image = Prefs.jellyfinUrl() + '/Items/' + imageId + '/Images/Primary?maxWidth=780';
+    return {
+      aio: true, resume: true, recent: false, kind: kind, id: n + 1, itemId: id,
+      title: title, meta: meta, poster: image, backdrop: image,
+      canRequest: false, mediaType: kind, mediaId: 0,
+      detailed: true, app: 'library'
+    };
+  }
+
+  function addResumeItems(items, into, seen) {
+    if (!items) return;
+    for (var i = 0; i < items.length && into.length < 24; i++) {
+      var p = resumePick(items[i], into.length);
+      if (p && !seen[p.itemId]) { seen[p.itemId] = true; into.push(p); }
+    }
+  }
+
+  function fetchResume(done) {
+    if (!Prefs.jellyfinUrl() || !Prefs.jellyfinKey()) { done(null); return; }
+    jfGet('/Users', function (err, users) {
+      if (err || !users || !users.length || !users[0].Id) { done(null); return; }
+      var user = users[0].Id;
+      jfGet('/Users/' + user + '/Items/Resume?Limit=16&Fields=ProductionYear,SeriesName', function (e1, resume) {
+        jfGet('/Shows/NextUp?userId=' + user + '&Limit=12&Fields=ProductionYear,SeriesName', function (e2, next) {
+          var rows = [], seen = {};
+          addResumeItems(resume && resume.Items, rows, seen);
+          addResumeItems(next && next.Items, rows, seen);
+          done(rows);
+        });
+      });
+    });
   }
 
   function fetchAio(done) {
@@ -602,9 +696,12 @@ var Data = (function () {
         var trending = home.trending || [], recent = home.recent || [];
         for (var i = 0; i < trending.length; i++) if (trending[i].title) list.push(aioPick(trending[i], false));
         for (var j = 0; j < recent.length; j++) if (recent[j].title) list.push(aioPick(recent[j], true));
-        if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
-        picks = list;
-        done(null);
+        fetchResume(function (rows) {
+          if (rows) for (var r = 0; r < rows.length; r++) list.push(rows[r]);
+          if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
+          picks = list;
+          done(null);
+        });
       });
     });
   }
@@ -686,7 +783,7 @@ var Data = (function () {
 
   /** This hour's picks for the three tabs, without repeats (the screensaver shows them too). */
   function all() {
-    var out = [], seen = {}, kinds = [null, 'movie', 'tv'];
+    var out = [], seen = {}, kinds = aioOn() ? ['resume', 'recent', 'movie', 'tv'] : [null, 'movie', 'tv'];
     for (var k = 0; k < kinds.length; k++) {
       var list = now(kinds[k]);
       for (var i = 0; i < list.length; i++) if (!seen[keyOf(list[i])]) { seen[keyOf(list[i])] = true; out.push(list[i]); }
@@ -737,7 +834,7 @@ var Data = (function () {
       var out = [], seen = {};
       for (var i = 0; i < picks.length; i++) {
         var p = picks[i];
-        if (p.aio && !p.recent && p.backdrop && !seen[p.kind + ':' + p.id]) { seen[p.kind + ':' + p.id] = true; out.push(p); }
+        if (p.aio && !p.recent && !p.resume && p.backdrop && !seen[p.kind + ':' + p.id]) { seen[p.kind + ':' + p.id] = true; out.push(p); }
       }
       return out;
     },
@@ -746,13 +843,19 @@ var Data = (function () {
       if (path.indexOf('http') === 0 || path.charAt(0) === '/') return aioImage(path);
       return 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path;
     },
-    needsAuth: function (url) { return !!url && aioBase() && url.indexOf(aioBase()) === 0; },
+    needsAuth: function (url) {
+      if (!url) return false;
+      if (aioBase() && url.indexOf(aioBase()) === 0) return true;
+      return !!Prefs.jellyfinUrl() && url.indexOf(Prefs.jellyfinUrl()) === 0;
+    },
     loadImage: function (url, done) {
       var x = new XMLHttpRequest();
       x.open('GET', url, true);
       x.responseType = 'blob';
       x.timeout = 15000;
-      if (Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
+      if (Prefs.jellyfinUrl() && url.indexOf(Prefs.jellyfinUrl()) === 0 && Prefs.jellyfinKey()) {
+        x.setRequestHeader('X-Emby-Token', Prefs.jellyfinKey());
+      } else if (Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
       x.onload = function () {
         if (x.status === 200 && x.response) done(URL.createObjectURL(x.response));
       };

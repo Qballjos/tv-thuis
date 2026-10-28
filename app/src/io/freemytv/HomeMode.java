@@ -73,12 +73,32 @@ final class HomeMode {
      */
     static final String[] DEBLOAT = {
         "com.google.android.play.games", "com.google.android.youtube.tvmusic",        // Play Games, YouTube Music
-        // TCL
+        "com.google.android.youtube.tv", "com.amazon.firetv.youtube",                // official YouTube; SmartTube and its bridge take over
+        "com.google.android.feedback", "com.android.tv.feedbackconsent",              // bug-report sender and its consent nag
+        "com.google.android.partnersetup",                                            // partner attribution
+        "com.google.android.tv.remotecontrol.logging",                                // remote usage logging (Google TV Streamer)
+        "com.google.android.federatedcompute",                                        // on-device telemetry upload
+        "com.google.android.ondevicepersonalization.services",                        // ad personalization
+        "com.google.android.adservices.api", "com.google.android.ext.adservices.api", // Privacy Sandbox ads
+        "com.google.android.tvrecommendations",                                       // recommendation rows; the side notification panel goes with them
+        "android.autoinstalls.config.google.gtvpai",                                  // silently installs partner apps
+        // TCL (65C75B is the G08 family, 58P635 is the G07 / P635 family; absent packages are skipped)
         "com.tcl.magiconnectfree", "com.tcl.miracast",                                // screen mirroring apps
+        "com.tcl.MultiScreenInteraction_TV",                                          // TCL's own mirroring promo
         "com.tcl.waterfall.overseas", "com.tcl.channelplus",                          // TCL Channel and its Live TV
-        "com.tcl.messagebox", "com.tcl.usercenter",                                   // TCL messages and account
+        "com.tcl.messagebox", "com.tcl.usercenter", "com.tcl.notereminder",           // TCL messages, account, promo reminders
         "com.tcl.exhibit", "com.tcl.esticker", "com.tcl.hotelmenu",                   // store demo, hotel menu
         "com.tcl.repairguide", "com.tcl.ocean.instructions", "com.tcl.logkit",        // repair guide, manual, logs
+        "com.tcl.bi", "com.tcl.overseasappshow",                                      // TCL analytics; re-enables promo apps at boot
+        "com.tcl.ttvs",                                                               // Samba TV and T-Cast (on some sets also the TCL updater)
+        // Philips (58PUS7304 is the 2019 7304 series, board TPM191E / PH9M_EA_5599, same list as the 43PUS7304)
+        "org.droidtv.candeebug", "org.droidtv.gel",                                   // DAC analytics and its metrics collector
+        "org.droidtv.usagelogger",                                                    // boot, keypress and panel telemetry
+        "org.droidtv.tv.frameworklogger",                                             // framework log uploader
+        "org.droidtv.demome",                                                         // retail demo
+        "org.droidtv.nettvrecommender", "org.droidtv.recommendation",                 // Top Picks row and its backend
+        "org.droidtv.nettv.market",                                                   // Smart TV Collection storefront
+        "com.zeasn.whalelive",                                                        // WhaleLive ad channels, on some Philips sets
         // Multilaser (Expressluck / CVTE board)
         "tv.anoki.acr.anokiacroptin",                                                 // Anoki ACR: watches what's on screen
         "fusion.android.tv.demo", "com.expressluck.tvhelpmanual",                     // store demo (also Xiaomi projectors), manual
@@ -104,7 +124,7 @@ final class HomeMode {
 
     /** Never turned off, not even by mistake (picture, sound, inputs, remote, store). Checked before every disable. */
     private static final Set<String> PROTECTED = new HashSet<>(Arrays.asList(
-        "com.tcl.ttvs", "com.tvos", "com.tcl.systemserver", "com.tcl.systemui.plugin", "com.tcl.tv", "com.tcl.tvinput",
+        "com.tvos", "com.tcl.systemserver", "com.tcl.systemui.plugin", "com.tcl.tv", "com.tcl.tvinput",
         "com.tcl.hearaid", "com.dolby.android.audio.service", "com.tcl.globalkeyoverlay", "com.tcl.autopair",
         "com.tcl.UpdatePeripheral", "com.tcl.dashboard", "com.tcl.suspension", "com.tcl.providers.config",
         "com.tcl.gamebar", "com.tcl.airplay2", "com.mirakulo.astrotv.service", "com.tcl.initsetup",
@@ -120,7 +140,7 @@ final class HomeMode {
         "com.android.tv.settings", "com.android.systemui", "android", PKG,
         // Philips (TP Vision) and MediaTek: system, Ambilight, live TV and inputs, setup, factory menu (#11)
         "org.droidtv", "org.droidtv.ambisvc", "org.droidtv.ui.strings", "org.droidtv.tv.packageinfo", "org.droidtv.icp",
-        "org.droidtv.gel", "org.droidtv.eum", "com.mediatek.tv.service", "com.mediatek.tvinput", "com.mediatek.network",
+        "org.droidtv.eum", "com.mediatek.tv.service", "com.mediatek.tvinput", "com.mediatek.network",
         "com.mediatek.wwtv.tvcenter", "com.mediatek.wwtv.setupwizard", "com.mediatek.tv.factory",
         "mediatek.factorymenu.ui", "com.tpv.xmic.ots.cms.client",
         // Multilaser (Expressluck / CVTE): remote pairing and keys, live TV, media player, factory menus
@@ -199,10 +219,17 @@ final class HomeMode {
     }
 
     /**
+     * Ask for TV_INPUT_HARDWARE without being an input. On Philips TPM191E, HDMI stayed after these two were
+     * disabled (CleanYourTV, 43PUS7304). The input check would otherwise leave the logger and the demo on.
+     */
+    private static final Set<String> INPUT_FALSE = new HashSet<>(Arrays.asList(
+            "org.droidtv.usagelogger", "org.droidtv.demome"));
+
+    /**
      * Of these, the ones the TV still needs, whatever they look like: the software under its inputs (they ask for
      * TV_INPUT_HARDWARE; off, HDMI shows "No signal" and only a full restore brought it back, CleanYourTV #321), and
      * the receiver of the remote's Input key and Bluetooth pairing (fusion.android.tv.demo on several MediaTek boards).
-     * null when the check didn't finish: then none of them goes off this time.
+     * null when the check didn't finish: then none of them goes off this time. INPUT_FALSE is not kept.
      */
     private static Set<String> neededByTv(Adb adb, Set<String> pkgs) throws IOException {
         Set<String> keep = new HashSet<>();
@@ -219,6 +246,7 @@ final class HomeMode {
         if (!out.contains("checked") || out.contains("unknown ")) return null;
         Matcher m = Pattern.compile("keep ([\\w.]+)").matcher(out);
         while (m.find()) keep.add(m.group(1));
+        keep.removeAll(INPUT_FALSE);
         if (!keep.isEmpty()) AppLog.w("kept on, the TV's inputs or remote need them: " + String.join(", ", sorted(keep)));
         return keep;
     }

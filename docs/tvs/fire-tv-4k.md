@@ -34,3 +34,5 @@ De stick vraagt om de verbinding toe te staan. Vink het vakje aan.
 4. Installeer Jellyfin of Plex uit de Amazon Appstore als je een titel wilt openen. Jellyfin staat daar niet altijd in; een apk van Jellyfin voor Fire TV installeer je met dezelfde `adb install`.
 
 De schermbeveiliging van TV Thuis geldt zolang de app open is. De Home-knop gaat terug naar Fire TV. Original in het menu van de app zet niets van Fire OS uit, omdat de Home-knop nooit is overgenomen.
+
+CleanYourTV heeft wel Fire TV-lijsten. Die worden hier niet toegepast. De omschakeling naar TV Thuis als startscherm weigert op Fire OS, en geen enkel `com.amazon.*`-pakket gaat uit.

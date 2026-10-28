@@ -285,6 +285,36 @@ final class Prefs {
         version++;
     }
 
+    /** Jellyfin, for continue watching. The API key is the one from the server's dashboard. */
+    static String jellyfinUrl() {
+        String saved = app != null && sp().contains("jellyfinUrl") ? sp().getString("jellyfinUrl", "") : Config.JELLYFIN_URL;
+        if (saved == null) return "";
+        saved = saved.trim();
+        while (saved.endsWith("/")) saved = saved.substring(0, saved.length() - 1);
+        return saved;
+    }
+
+    static String jellyfinKey() {
+        String saved = app != null && sp().contains("jellyfinKey") ? sp().getString("jellyfinKey", "") : Config.JELLYFIN_KEY;
+        return saved == null ? "" : saved.trim();
+    }
+
+    static boolean jellyfinKeySet() { return !jellyfinKey().isEmpty(); }
+
+    static void setJellyfinUrl(String url) {
+        if (app == null) return;
+        String value = url == null ? "" : url.trim();
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        sp().edit().putString("jellyfinUrl", value).commit();
+        version++;
+    }
+
+    static void setJellyfinKey(String key) {
+        if (app == null) return;
+        sp().edit().putString("jellyfinKey", key == null ? "" : key.trim()).commit();
+        version++;
+    }
+
     /** Copies the build's values the first time the TV saves one field, so the others are not lost. */
     private static android.content.SharedPreferences.Editor keepAio() {
         android.content.SharedPreferences.Editor e = sp().edit();
@@ -360,7 +390,7 @@ final class Prefs {
         if (RemoteKeys.HISENSE) {
             switch (keyCode) {
                 case KEY_HISENSE_PRIME: return "com.amazon.amazonvideo.livingroom";
-                case KEY_HISENSE_YOUTUBE: return "com.google.android.youtube.tv";
+                case KEY_HISENSE_YOUTUBE: return "org.smarttube.stable";
                 case KEY_HISENSE_DISNEY: return "com.disney.disneyplus";
                 case KEY_HISENSE_APPS: return ALL_APPS;
                 case KEY_HISENSE_SETTINGS: return "com.android.tv.settings";
@@ -369,7 +399,7 @@ final class Prefs {
         }
         switch (keyCode) {
             case KEY_NETFLIX: case KEY_STEM_NETFLIX: return "com.netflix.ninja";
-            case KEY_YOUTUBE: return "com.google.android.youtube.tv";
+            case KEY_YOUTUBE: return "org.smarttube.stable";
             case KEY_PRIME: return "com.amazon.amazonvideo.livingroom";
             case KEY_TCL_CHANNEL: return "";
             case KEY_MI: return HomeMode.PKG;   // our home screen: the remote has no other Home button

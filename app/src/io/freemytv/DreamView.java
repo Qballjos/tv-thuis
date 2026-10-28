@@ -790,7 +790,8 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         if (p.aio) {
             String player = Aio.playerPackage(getContext());
             if (player == null) return false;
-            boolean opened = HomeApps.open(getContext(), HomeApps.app(player, player.contains("plex") ? "Plex" : "Jellyfin", null), null);
+            if (Aio.viewInWholphin(getContext(), player, p.itemId)) return true;
+            boolean opened = HomeApps.open(getContext(), HomeApps.app(player, player.contains("plex") ? "Plex" : "Wholphin", null), null);
             if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + player);
             return opened;
         }

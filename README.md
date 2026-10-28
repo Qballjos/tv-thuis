@@ -8,7 +8,9 @@ Startscherm voor de televisies in huis, gebaseerd op [Free My TV](https://github
 | Films | Trending films van deze week |
 | Series | Trending series van deze week |
 
-OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr (de manager doet dat). OK op een titel die er al is, opent Jellyfin of Plex.
+OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr (de manager doet dat). OK op een titel die er al is, opent Wholphin.
+
+De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
 
 De schermbeveiliging toont de posters van de trendinglijst op een zwarte achtergrond, met klok en weer. Zwarte randen blijven uit, de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
 

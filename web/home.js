@@ -63,11 +63,15 @@
 
   // MARK: - Apps on the shelf
 
-  /** Shelf apps in this order when installed, like the Android app: key, LG app id, name on the TV, brand gradient. */
+  /** Known apps: key, app id, title, brand gradient. The first five are the default shelf. */
   var SHELF = [
+    ['wholphin', /wholphin/i, /wholphin/i, ['#0B6E99', '#06344A']],
+    ['smarttube', /smarttube/i, /smarttube/i, ['#E53935', '#7A1515']],
+    ['prime', /^amazon$/, /prime video|amazon/i, ['#2AA8FF', '#0A68D4']],
+    ['protect', /unifi\.protect|unifiprotect/i, /unifi protect/i, ['#006FFF', '#003A88']],
+    ['homey', /homey/i, /homey/i, ['#7B5CFF', '#2A1B6B']],
     ['netflix', /^netflix$/, /netflix/i, ['#0A0A0A', '#000000']],
     ['youtube', /youtube/, /^youtube$/i, ['#1C1C1E', '#09090A']],
-    ['prime', /^amazon$/, /prime video|amazon/i, ['#2AA8FF', '#0A68D4']],
     ['disney', /disney/, /disney/i, ['#173584', '#08143F']],
     ['max', /hbo|wbd/, /^(hbo )?max$|hbo max/i, ['#5C30E8', '#221684']],
     ['appletv', /appletv|apple\.tv/, /apple tv/i, ['#1C1C1E', '#000000']],
@@ -302,7 +306,7 @@
       }
       if (!out.length) out = apps.slice(0, FEW_APPS);
     } else {
-      for (var s = 0; s < SHELF.length && out.length < FEW_APPS; s++) {
+      for (var s = 0; s < 5 && s < SHELF.length && out.length < FEW_APPS; s++) {
         for (var a = 0; a < apps.length; a++) {
           if ((SHELF[s][1].test(apps[a].id) || SHELF[s][2].test(apps[a].title)) && out.indexOf(apps[a]) < 0) { out.push(apps[a]); break; }
         }
@@ -329,8 +333,8 @@
       setClass(list[i], 'focus', st.zone === Z.TOP && st.top === i);
     }
     list = $('buttons').children;
-    for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.TOP && st.top === 3 + i);
-    setClass($('quotes'), 'hide', st.zone === Z.TOP && st.top >= 3);
+    for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.TOP && st.top === tabCount() + i);
+    setClass($('quotes'), 'hide', st.zone === Z.TOP && st.top >= tabCount());
     layoutCards();
     list = $('cards').children;
     for (i = 0; i < list.length; i++) setClass(list[i], 'focus', st.zone === Z.CARDS && st.card === i);
@@ -378,14 +382,28 @@
 
   // MARK: - Top: title, tabs, buttons, quotes
 
-  var TAB_KIND = [null, 'movie', 'tv'];
+  function tabCount() { return Data.aioOn() ? 4 : 3; }
+
+  function tabKind(i) {
+    if (!Data.aioOn()) return i === 0 ? null : i === 1 ? 'movie' : 'tv';
+    return i === 0 ? 'resume' : i === 1 ? 'recent' : i === 2 ? 'movie' : 'tv';
+  }
+
+  /** Continue watching when it has titles, otherwise the first tab that does. */
+  function firstTab() {
+    if (!Data.aioOn()) return 0;
+    for (var i = 0; i < tabCount(); i++) if (Data.picks(tabKind(i)).length) return i;
+    return 0;
+  }
 
   function renderTop() {
     $('title').textContent = tr('For You');
     var tabs = $('tabs');
     tabs.innerHTML = '';
-    var names = [tr(Data.aioOn() ? 'Recently added' : 'Explore'), tr('Movies'), tr('Shows')];
-    for (var i = 0; i < 3; i++) {
+    var names = Data.aioOn()
+      ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows')]
+      : [tr('Explore'), tr('Movies'), tr('Shows')];
+    for (var i = 0; i < names.length; i++) {
       var t = el('button', 'tab', tabs, names[i]);
       hover(t, Z.TOP, i);
     }
@@ -397,7 +415,7 @@
       r.style.left = (1596 + 88 * b) + 'px';
       sym(defs[b][0], r);
       el('div', 'tip', r, defs[b][1]);
-      hover(r, Z.TOP, 3 + b);
+      hover(r, Z.TOP, tabCount() + b);
     }
   }
 
@@ -414,11 +432,12 @@
   // MARK: - Picks and background
 
   function renderCards() {
-    var list = Data.picks(TAB_KIND[st.tab]);
+    if (st.tab >= tabCount()) st.tab = 0;
+    var list = Data.picks(tabKind(st.tab));
     var holder = $('cards');
     setClass(body, 'no-picks', !list.length);
     setClass(body, 'no-key', !Data.hasKey());   // as on Android: no title or tabs that could never show anything
-    if (!Data.hasKey() && st.zone === Z.TOP && st.top < 3) st.top = 3;
+    if (!Data.hasKey() && st.zone === Z.TOP && st.top < tabCount()) st.top = tabCount();
     var same = list.length === cards.length;
     for (var i = 0; same && i < list.length; i++) same = list[i].id === cards[i].id && list[i].backdrop === cards[i].backdrop && list[i].meta === cards[i].meta;
     if (same && holder.children.length === list.length) return;
@@ -746,6 +765,8 @@
       {label: tr('AIO server'), value: host || tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('url'); }},
       {label: tr('Username'), value: Prefs.aioUser() || tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('user'); }},
       {label: tr('Password'), value: Prefs.aioPassword() ? '••••' : tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('password'); }},
+      {label: tr('Jellyfin server'), value: Prefs.jellyfinUrl() || tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('jellyfin'); }},
+      {label: tr('Jellyfin API key'), value: Prefs.jellyfinKey() ? '••••' : tr('Not set'), opens: true, step: function (d) { if (d >= 0) openAioField('jellyfinKey'); }},
       {label: tr('Search and request'), value: '›', step: function (d) { if (d >= 0) openAioSearch(); }},
       {label: tr('Test connection'), value: '›', step: function (d) { if (d >= 0) testAio(); }}
     ];
@@ -1040,14 +1061,16 @@
   function renderAioSheet() {
     var box = $('keypick').firstChild, old = fieldOf('keypick'), typed = old && aioEdit ? old.value : '';
     var keep = st.zone === Z.AIO ? st.aio : 0;
-    var labels = {url: tr('AIO server'), user: tr('Username'), password: tr('Password'), search: tr('Search and request')};
-    var current = aioEdit === 'url' ? Prefs.aioUrl() : aioEdit === 'user' ? Prefs.aioUser() : '';
+    var labels = {url: tr('AIO server'), user: tr('Username'), password: tr('Password'),
+      jellyfin: tr('Jellyfin server'), jellyfinKey: tr('Jellyfin API key'), search: tr('Search and request')};
+    var current = aioEdit === 'url' ? Prefs.aioUrl() : aioEdit === 'user' ? Prefs.aioUser()
+      : aioEdit === 'jellyfin' ? Prefs.jellyfinUrl() : '';
     box.innerHTML = '';
     el('div', 'title', box, labels[aioEdit] || tr('AIO Media'));
     var list = el('div', 'list', box), holder = el('div', 'rows', list);
     list.style.height = Math.min(aioSheetRows(), 7) * 78 + 'px';
     var field = textField(holder, Z.AIO, typed || current, aioEdit === 'search' ? tr('Type a title') : labels[aioEdit], labels[aioEdit] || '');
-    if (aioEdit === 'password') field.type = 'password';
+    if (aioEdit === 'password' || aioEdit === 'jellyfinKey') field.type = 'password';
     var action = el('div', 'row', holder, aioEdit === 'search' ? tr('Search') : tr('Save'));
     sym('chevron_right', el('span', 'value', action));
     hover(action, Z.AIO, 1);
@@ -1073,10 +1096,14 @@
 
   function saveAioField() {
     var f = fieldOf('keypick'), value = f ? f.value : '';
-    if (aioEdit === 'url') Prefs.set('aioUrl', value.replace(/\s+/g, '').replace(/\/+$/, ''));
-    else if (aioEdit === 'user') Prefs.set('aioUser', value.replace(/^\s+|\s+$/g, ''));
-    else if (aioEdit === 'password') Prefs.set('aioPassword', value);
-    Prefs.set('aioToken', '');
+    if (aioEdit === 'jellyfin') Prefs.set('jellyfinUrl', value.replace(/\s+/g, '').replace(/\/+$/, ''));
+    else if (aioEdit === 'jellyfinKey') Prefs.set('jellyfinKey', value.replace(/^\s+|\s+$/g, ''));
+    else {
+      if (aioEdit === 'url') Prefs.set('aioUrl', value.replace(/\s+/g, '').replace(/\/+$/, ''));
+      else if (aioEdit === 'user') Prefs.set('aioUser', value.replace(/^\s+|\s+$/g, ''));
+      else if (aioEdit === 'password') Prefs.set('aioPassword', value);
+      Prefs.set('aioToken', '');
+    }
     closeAioField(true);
     Data.refresh();
     renderTop();
@@ -1121,13 +1148,12 @@
   }
 
   function playerApp() {
-    for (var i = 0; i < apps.length; i++) {
-      var id = (apps[i].id || '').toLowerCase(), title = (apps[i].title || '').toLowerCase();
-      if (id.indexOf('jellyfin') >= 0 || title.indexOf('jellyfin') >= 0) return apps[i];
-    }
-    for (var j = 0; j < apps.length; j++) {
-      var id2 = (apps[j].id || '').toLowerCase(), title2 = (apps[j].title || '').toLowerCase();
-      if (id2.indexOf('plex') >= 0 || title2.indexOf('plex') >= 0) return apps[j];
+    var want = [/wholphin/i, /jellyfin/i, /plex/i];
+    for (var w = 0; w < want.length; w++) {
+      for (var i = 0; i < apps.length; i++) {
+        var id = (apps[i].id || '').toLowerCase(), title = (apps[i].title || '').toLowerCase();
+        if (want[w].test(id) || want[w].test(title)) return apps[i];
+      }
     }
     return null;
   }
@@ -1378,9 +1404,9 @@
   function activate() {
     switch (st.zone) {
       case Z.TOP:
-        if (st.top < 3) return;
-        if (st.top === 3) { var live = liveTV(); if (live) launcher(live.id, tr('Live TV'))(); }
-        else if (st.top === 4) { st.zone = Z.SHELF; openDrawer(); st.drawer = 1 < drawerInputs ? 1 : 0; updateFocus(); }
+        if (st.top < tabCount()) return;
+        if (st.top === tabCount()) { var live = liveTV(); if (live) launcher(live.id, tr('Live TV'))(); }
+        else if (st.top === tabCount() + 1) { st.zone = Z.SHELF; openDrawer(); st.drawer = 1 < drawerInputs ? 1 : 0; updateFocus(); }
         else openSettings();
         return;
       case Z.CARDS:
@@ -1395,7 +1421,7 @@
         if (p && p.aio) {
           var player = playerApp();
           if (player) launcher(player.id, player.title)();
-          else toast(tr('Install Jellyfin or Plex to play this.'));
+          else toast(tr('Install Wholphin to play this.'));
           return;
         }
         var app = p && Data.appFor(p.app);
@@ -1448,7 +1474,7 @@
         else if (dy > 0) { openDrawer(); return; }
         else if (dy < 0) {
           if (cards.length) { st.zone = Z.CARDS; st.card = nearest(cardNodes, centerX(tiles[st.shelf])); }
-          else { st.zone = Z.TOP; st.top = Data.hasKey() ? st.tab : 3; }
+          else { st.zone = Z.TOP; st.top = Data.hasKey() ? st.tab : tabCount(); }
         }
         break;
       case Z.CARDS:
@@ -1458,10 +1484,10 @@
         break;
       case Z.TOP:
         if (dx) {
-          st.top = Math.max(Data.hasKey() ? 0 : 3, Math.min(5, st.top + dx));   // without the picks the tabs can't hold focus
-          if (st.top < 3) selectTab(st.top);   // as on Apple TV: focusing a tab selects it
+          st.top = Math.max(Data.hasKey() ? 0 : tabCount(), Math.min(tabCount() + 2, st.top + dx));   // without the picks the tabs can't hold focus
+          if (st.top < tabCount()) selectTab(st.top);   // as on Apple TV: focusing a tab selects it
         } else if (dy > 0) {
-          if (cards.length) { st.zone = Z.CARDS; st.card = Math.min(cards.length - 1, st.top < 3 ? 0 : cards.length - 1); }
+          if (cards.length) { st.zone = Z.CARDS; st.card = Math.min(cards.length - 1, st.top < tabCount() ? 0 : cards.length - 1); }
           else st.zone = Z.SHELF;
         }
         break;
@@ -1532,10 +1558,10 @@
       if (saverOn || (sheetOpen() !== (zone === Z.APPS || zone === Z.SETTINGS || zone === Z.EDIT || zone === Z.LANG || zone === Z.CITY || zone === Z.KEY || zone === Z.AIO || zone === Z.ABOUT))) return;
       if (zone === Z.DRAWER && st.zone !== Z.DRAWER) return;
       if (zone !== Z.DRAWER && st.zone === Z.DRAWER && zone !== Z.SHELF) return;
-      if (zone === Z.TOP && index < 3 && !Data.hasKey()) return;   // the tabs are hidden without the picks
+      if (zone === Z.TOP && index < tabCount() && !Data.hasKey()) return;   // the tabs are hidden without the picks
       if (zone === Z.SHELF && st.zone === Z.DRAWER) closeDrawer();
       st.zone = zone;
-      if (zone === Z.TOP) { st.top = index; if (index < 3) selectTab(index); }
+      if (zone === Z.TOP) { st.top = index; if (index < tabCount()) selectTab(index); }
       else if (zone === Z.CARDS) st.card = index;
       else if (zone === Z.SHELF) st.shelf = index;
       else if (zone === Z.DRAWER) st.drawer = index;
@@ -1727,7 +1753,8 @@
     closeSheets();
     st.zone = Z.SHELF;
     st.shelf = 0;
-    if (st.tab !== 0) { st.tab = 0; renderCards(); }
+    var first = firstTab();
+    if (st.tab !== first) { st.tab = first; renderCards(); }
     updateFocus();
     restInDrawer();   // drawer_first: out again at once, not only after the TV lists its apps
   }

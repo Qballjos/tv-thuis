@@ -40,3 +40,5 @@ Play Protect op Android 14 kan *Risky app blocked* tonen. Meer details → Toch 
 5. Jellyfin of Plex uit de Play Store.
 
 De Home-knop van de streamer opent daarna TV Thuis op de tv waar hij op HDMI zit. De schermbeveiliging is de trendingposter op zwart met klok en weer, ook als het paneel erachter OLED is.
+
+De streamer (kirkwood) heeft geen TCL- of Philips-apps. Bij de omschakeling gaan de Google-onderdelen uit die kijkgedrag en advertenties bijhouden: feedback, logging van de afstandsbediening, federated compute, personalisatie en de Privacy Sandbox. Het zijpaneel met meldingen gaat mee uit. Chromecast en de Play Store blijven aan.

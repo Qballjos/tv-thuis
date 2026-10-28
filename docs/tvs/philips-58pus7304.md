@@ -38,6 +38,8 @@ Beantwoord de vraag op de tv, vink Altijd toestaan aan, en verbind daarna opnieu
 3. Home Settings → **AIO Media** en **Stad**.
 4. Installeer Jellyfin of Plex uit de Play Store.
 
-Ambilight blijft van Philips. TV Thuis vervangt alleen het startscherm en, tenzij je de schermbeveiliging uitzet, de screensaver. Original zet het Philips-startscherm terug.
+Ambilight, HDMI, Chromecast en de firmware-updates blijven aan. Original zet het Philips-startscherm terug, en de apps hieronder weer aan.
+
+Bij Home Screen → TV Thuis gaan de Philips-loggers en reclame uit, dezelfde als op de 43PUS7304 (hetzelfde bord, TPM191E): DAC-analytics, de gebruiks- en frameworklogger, de winkeldemo, Top Picks en Smart TV Collection. Het zijpaneel met meldingen gaat mee uit, dat zit aan de aanbevelingsrijen vast. Netflix, Prime Video, de microfoonknop en Alexa blijven.
 
 De set is uit 2019. Houd de apk klein en zet niet te veel zware apps ernaast. De posterrij haalt zijn plaatjes van de mediamanager; een TMDB-sleutel is niet nodig zolang AIO Media is ingevuld.

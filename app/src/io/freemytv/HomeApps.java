@@ -89,6 +89,13 @@ final class HomeApps {
      * art's colors as they are. Last, a visual size tweak for the logo. Edit freely.
      */
     private static final String[][] SHELF = {
+        {"wholphin", "Wholphin", "com.github.damontecres.wholphin", "0B6E99", "", "1"},
+        {"wholphin", "Wholphin", "com.github.damontecres.wholphin.debug", "0B6E99", "", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.stable", "E53935", "", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.beta", "E53935", "", "1"},
+        {"smarttube", "SmartTube", "app.smarttube", "E53935", "", "1"},
+        {"protect", "UniFi Protect", "com.ubnt.unifi.protect", "006FFF", "", "1"},
+        {"homey", "Homey", "tv.homey", "7B5CFF", "", "1"},
         {"netflix", "Netflix", "com.netflix.ninja", "E50914", "", "1"},
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
         {"youtube", "YouTube", "com.amazon.firetv.youtube", "FF0033", "play", "1"},
@@ -116,6 +123,15 @@ final class HomeApps {
         {"wink", "Wink", "ru.rt.video.app.tv", "FF5A1F", "", "1"},
         {"spotify", "Spotify", "com.spotify.tv.android", "1DB954", "", "1"},
     };
+    /**
+     * The shelf before anyone edits it: Wholphin, SmartTube, Prime Video, UniFi Protect, Homey.
+     * One package per app; the first that is installed wins.
+     */
+    private static final String[] DEFAULT_SHELF = {
+            "com.github.damontecres.wholphin", "com.github.damontecres.wholphin.debug",
+            "org.smarttube.stable", "org.smarttube.beta", "app.smarttube",
+            "com.amazon.amazonvideo.livingroom", "com.amazon.firebat", "com.amazon.avod",
+            "com.ubnt.unifi.protect", "tv.homey"};
     /**
      * Apps the shelf shows at once (it scrolls for the rest): 8, today's smallest tiles (178 wide in HomeView's 1760 of
      * content), so a shelf of up to 8 looks as it always did. The built-in list keeps 8, and low-memory TVs hold 8 at
@@ -153,6 +169,8 @@ final class HomeApps {
             "com.xiaomi.mitv.manualhelp",           // Xiaomi: user manual
             "com.Smartdevice.emanual",              // Skyworth: user manual
             "com.google.android.videos",            // Google Play Movies (discontinued)
+            "com.google.android.youtube.tv",        // YouTube: SmartTube and its bridge take this
+            "com.amazon.firetv.youtube",
             "com.disney.starplus",                  // Star+ (merged into Disney+)
             "com.tcl.exhibit"));                    // TCL: T-Exhibition
 
@@ -214,11 +232,13 @@ final class HomeApps {
         List<String> out = new ArrayList<>();
         Set<String> keys = new HashSet<>();
         PackageManager pm = c.getPackageManager();
-        for (String[] d : SHELF) {
-            if (out.size() < FEW_APPS && !keys.contains(d[0]) && launchIntent(pm, d[2]) != null) {
-                keys.add(d[0]);
-                out.add(d[2]);
-            }
+        for (String pkg : DEFAULT_SHELF) {
+            if (out.size() >= FEW_APPS) break;
+            String[] d = known(pkg);
+            String key = d != null ? d[0] : pkg;
+            if (keys.contains(key) || launchIntent(pm, pkg) == null) continue;
+            keys.add(key);
+            out.add(pkg);
         }
         return out;
     }

@@ -15,7 +15,8 @@ import translate  # noqa: E402  (the catalogues and the keys the web app uses)
 
 GENERIC = {'tmdbKey': '', 'tmdbRegion': '', 'latitude': '', 'longitude': '', 'city': '', 'language': 'auto',
            'currency': '', 'temperature': 'auto', 'theme': 'auto', 'showCrypto': True, 'hideAnimation': False, 'hideApps': [],
-           'shelfApps': [], 'drawerFirst': False, 'aioUrl': '', 'aioUser': '', 'aioPassword': ''}
+           'shelfApps': [], 'drawerFirst': False, 'aioUrl': '', 'aioUser': '', 'aioPassword': '',
+           'jellyfinUrl': '', 'jellyfinKey': ''}
 
 
 def config_from_args(args):
@@ -69,6 +70,8 @@ def read_config(path):
         'aioUrl': values.get('aio_url', '').rstrip('/'),
         'aioUser': values.get('aio_user', ''),
         'aioPassword': values.get('aio_password', ''),
+        'jellyfinUrl': values.get('jellyfin_url', '').rstrip('/'),
+        'jellyfinKey': values.get('jellyfin_key', ''),
     }
 
 

@@ -1035,6 +1035,7 @@ public class SettingsActivity extends Activity {
 
         private String[] aioLabels() {
             return new String[] {Ui.tr("AIO server"), Ui.tr("Username"), Ui.tr("Password"),
+                    Ui.tr("Jellyfin server"), Ui.tr("Jellyfin API key"),
                     Ui.tr("Search and request"), Ui.tr("Test connection")};
         }
 
@@ -1044,6 +1045,8 @@ public class SettingsActivity extends Activity {
                     host.isEmpty() ? Ui.tr("Not set") : host,
                     Prefs.aioUser().isEmpty() ? Ui.tr("Not set") : Prefs.aioUser(),
                     Prefs.aioPasswordSet() ? "••••" : Ui.tr("Not set"),
+                    Prefs.jellyfinUrl().isEmpty() ? Ui.tr("Not set") : Prefs.jellyfinUrl(),
+                    Prefs.jellyfinKeySet() ? "••••" : Ui.tr("Not set"),
                     "›",
                     aioBusy ? Ui.tr("Checking…") : (aioStatus.isEmpty() ? "›" : aioStatus)
             };
@@ -1264,7 +1267,9 @@ public class SettingsActivity extends Activity {
                 case 0: editAio(0); break;
                 case 1: editAio(1); break;
                 case 2: editAio(2); break;
-                case 3: searchAio(); break;
+                case 3: editAio(3); break;
+                case 4: editAio(4); break;
+                case 5: searchAio(); break;
                 default: testAio();
             }
         }
@@ -1281,8 +1286,15 @@ public class SettingsActivity extends Activity {
                 title = Ui.tr("Username");
                 field.setText(Prefs.aioUser());
                 field.setInputType(InputType.TYPE_CLASS_TEXT);
-            } else {
+            } else if (which == 2) {
                 title = Ui.tr("Password");
+                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            } else if (which == 3) {
+                title = Ui.tr("Jellyfin server");
+                field.setText(Prefs.jellyfinUrl());
+                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+            } else {
+                title = Ui.tr("Jellyfin API key");
                 field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
             }
             field.setImeOptions(EditorInfo.IME_ACTION_DONE);
@@ -1303,7 +1315,9 @@ public class SettingsActivity extends Activity {
         private void saveAio(int which, String value) {
             if (which == 0) Prefs.setAioUrl(value);
             else if (which == 1) Prefs.setAioUser(value);
-            else Prefs.setAioPassword(value);
+            else if (which == 2) Prefs.setAioPassword(value);
+            else if (which == 3) Prefs.setJellyfinUrl(value);
+            else Prefs.setJellyfinKey(value);
             aioStatus = "";
             Recs.get(getContext()).refreshIfStale();
             invalidate();

@@ -102,6 +102,12 @@ final class RemoteKeys {
             Intent intent = pkg.equals(HomeMode.PKG) || pkg.equals(Prefs.ALL_APPS)
                     ? new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
                     : launchIntent(c.getPackageManager(), pkg);
+            if (intent == null && ("org.smarttube.stable".equals(pkg) || "com.google.android.youtube.tv".equals(pkg))) {
+                for (String alt : new String[] {"org.smarttube.beta", "app.smarttube"}) {
+                    intent = launchIntent(c.getPackageManager(), alt);
+                    if (intent != null) break;
+                }
+            }
             if (pkg.equals(Prefs.ALL_APPS)) intent.putExtra(HomeActivity.EXTRA_ALL_APPS, true);
             AppLog.w("remote key " + e.getKeyCode() + " -> " + pkg + (intent == null ? " (not installed)" : ""));
             if (intent != null) c.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
