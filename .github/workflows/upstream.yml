@@ -1,0 +1,36 @@
+# Brings new Free My TV versions into this fork. A clean merge is pushed to main. A conflict
+# stops the run, so the household media manager is never overwritten by a forced update.
+name: Upstream
+
+on:
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: upstream
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    name: Merge Free My TV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Merge upstream main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/simbasjungles/free-my-tv.git
+          git fetch upstream main
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Already on the latest Free My TV."
+            exit 0
+          fi
+          git merge upstream/main -m "Merge upstream Free My TV."
+          git push origin HEAD

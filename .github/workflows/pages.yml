@@ -17,7 +17,29 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  site:
+    name: See if GitHub Pages is enabled
+    runs-on: ubuntu-latest
+    outputs:
+      enabled: ${{ steps.site.outputs.enabled }}
+    steps:
+      - name: See if GitHub Pages is enabled
+        id: site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # This repository publishes freemytv.io. A fork with Pages left off has no site, and the
+          # deploy below fails the push. Skip it there; turn Pages on (GitHub Actions) and it publishes.
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is not enabled on this repository, so the site is not published."
+          fi
+
   deploy:
+    needs: site
+    if: needs.site.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
