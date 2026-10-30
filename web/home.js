@@ -2,7 +2,7 @@
  * The home screen for web-app TVs (LG webOS, Samsung Tizen), with the Android app's design and behavior (HomeView):
  *  - top: the "For You" title and the tabs (Explore, Movies, Shows); icon-only glass buttons at the right (Live TV,
  *    HDMI Inputs, Settings) and the crypto quotes at the end of the tab row;
- *  - three picks for this hour in the selected tab; the background is the first one's photo, blurred and almost white;
+ *  - three picks for this hour in the selected tab; the background is the focused one's photo, blurred, almost white;
  *  - the glass shelf with the apps; ↓ opens the drawer (inputs, shortcuts, weather, prices); ↑ or Back closes it;
  *  - a night look from sunset to sunrise; a screensaver after a few idle minutes.
  * The remote's arrows, OK and Back move the focus; a pointer (LG's Magic Remote) focuses what it points at.
@@ -55,9 +55,14 @@
 
   var stage = $('stage'), body = document.body;
 
-  /** The 1920 × 1080 stage fills the window (on the TV it already is 1920 × 1080). */
+  /**
+   * The 1920 × 1080 stage fills the window (on the TV it already is 1920 × 1080). A TV's window only gets shorter for
+   * the keyboard (Samsung's resizes it while the city or key field has focus): there the stage keeps its width and the
+   * keyboard covers its bottom, as in other apps. Fitted to the short window, it shrank into the top left beside a white
+   * band (#399).
+   */
   function fit() {
-    var s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+    var s = TV.name !== 'browser' ? window.innerWidth / 1920 : Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
     stage.style.webkitTransform = stage.style.transform = s === 1 ? '' : 'scale(' + s + ')';
   }
 
@@ -354,6 +359,7 @@
     focusRows($('citypick'), st.city, st.zone === Z.CITY);
     focusRows($('keypick'), st.zone === Z.AIO ? st.aio : st.key, st.zone === Z.KEY || st.zone === Z.AIO);
     setClass(body, 'drawer-open', st.zone === Z.DRAWER);
+    followSoon();
   }
 
   function focusRows(sheet, index, on) {
@@ -456,7 +462,7 @@
     }
     st.card = Math.min(st.card, Math.max(0, list.length - 1));
     if (!list.length && st.zone === Z.CARDS) st.zone = Z.SHELF;
-    backdrop(list.length ? Data.image(list[0].backdrop, 'w300') : '');
+    backdrop(list.length ? Data.image(list[st.card].backdrop, 'w300') : '');
     updateFocus();
   }
 
@@ -484,7 +490,7 @@
 
   var bgUrl = null, bgFront = 'bgA';
 
-  /** The first pick's photo as the background: drawn tiny and stretched, it's already as soft as a heavy blur. */
+  /** The focused pick's photo as the background: drawn tiny and stretched, it's already as soft as a heavy blur. */
   function backdrop(url) {
     if (url === bgUrl) return;
     bgUrl = url;
@@ -513,6 +519,17 @@
     if (!src) return;
     if (Data.needsAuth(src)) Data.loadImage(src, function (blob) { if (blob) node.style.backgroundImage = 'url(' + blob + ')'; });
     else node.style.backgroundImage = 'url(' + src + ')';
+  }
+
+  // As HomeView's bgFollow: the background follows the focused pick.
+  var BG_FOLLOW_MS = 500, bgTimer = 0;
+
+  /** The focused pick's photo as the background once the focus has rested on it: a quick run along the row fades once. */
+  function followSoon() {
+    clearTimeout(bgTimer);
+    bgTimer = setTimeout(function () {
+      if (cards.length) backdrop(Data.image(cards[Math.min(st.card, cards.length - 1)].backdrop, 'w300'));
+    }, BG_FOLLOW_MS);
   }
 
   function renderClock() {
@@ -783,6 +800,10 @@
         step: function (d) { cycle('temperature', ['auto', 'C', 'F'], unit, d); renderPanels(); }},
       {label: tr('Theme'), value: theme === 'light' ? tr('Light') : theme === 'dark' ? tr('Dark') : auto,
         step: function (d) { cycle('theme', ['auto', 'light', 'dark'], theme, d); checkNight(); }},
+      {label: tr('Dim'), value: dimName(),
+        step: function (d) { cycle('dim', ['off', 'low', 'medium', 'high', 'auto'], Prefs.dim(), d); applyDim(); }},
+      {label: tr('Screensaver'), value: saverMode() === 'clock' ? tr('Clock') : tr('Photos'),
+        step: function (d) { cycle('saver', ['photos', 'clock'], saverMode(), d); }},
       {label: tr('Picks per tab'), value: String(Prefs.cards()),
         step: function (d) { Prefs.set('cards', 3 + (Prefs.cards() - 3 + (d || 1) + 4) % 4); renderCards(); }},
       {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
@@ -1463,7 +1484,14 @@
   function selectTab(i) {
     if (i === st.tab) return;
     st.tab = i;
+    // A tab opens at its first pick, its row at the start: at once, as on Android, not sliding from the last tab's place.
+    st.card = 0;
+    var holder = $('cards');
+    holder.style.webkitTransition = holder.style.transition = 'none';
     renderCards();
+    layoutCards();   // renderCards returns early when this tab's picks are the same
+    void holder.offsetWidth;   // the row is laid out where it lands before the slide comes back
+    holder.style.webkitTransition = holder.style.transition = '';
   }
 
   function move(dx, dy) {
@@ -1603,6 +1631,28 @@
 
   var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, saverPick = null, SAVER_AFTER = 5 * 60000;
 
+  /** "photos" (the picks' photos, as it always was) or "clock": what the screen shows when nobody touches it. */
+  function saverMode() { return Prefs.saver(); }
+
+  /** Dim, as the person picked it: off, low, medium, high, or automatic (medium from 22:00 to 07:00). */
+  function dimName() {
+    var v = Prefs.dim();
+    return v === 'low' ? tr('dim|Low') : v === 'medium' ? tr('dim|Medium') : v === 'high' ? tr('dim|High')
+      : v === 'auto' ? tr('Automatic') : tr('Off');
+  }
+
+  function dimLevel() {
+    var v = Prefs.dim();
+    if (v === 'auto') { var h = new Date().getHours(); return h >= 22 || h < 7 ? 2 : 0; }
+    return v === 'low' ? 1 : v === 'medium' ? 2 : v === 'high' ? 3 : 0;
+  }
+
+  /** The panel's brightness is a private API: this is a black layer over the picture instead. */
+  function applyDim() {
+    var level = dimLevel();
+    $('dim').className = 'layer' + (level ? ' d' + level : '');
+  }
+
   /** The screensaver's photos: picks with an app on the TV. */
   function saverPhotos() {
     if (Data.aioOn()) return Data.showcase().filter(function (p) { return p.backdrop && !p.recent; });
@@ -1669,8 +1719,49 @@
     setClass($('saver'), 'on', false);
   }
 
+  // MARK: - The clock screensaver: a clock, the date and the weather, drifting slowly for OLED panels
+
+  var ambientOn = false, ambientTimer = 0;
+
+  function showAmbient() {
+    if (ambientOn) return;
+    var a = $('ambient');
+    a.innerHTML = '';
+    var shift = el('div', 'shift', a);
+    el('div', 'clock', shift);
+    el('div', 'date', shift);
+    var side = el('div', 'side', shift);
+    el('div', 'temp', side);
+    el('div', 'cond', side);
+    ambientOn = true;
+    setClass(a, 'on', true);
+    ambientTimer = setInterval(tickAmbient, 30000);
+    tickAmbient();
+  }
+
+  function tickAmbient() {
+    if (!ambientOn) return;
+    var a = $('ambient'), d = new Date(), w = Prefs.weather() ? Data.weather : null;
+    a.querySelector('.clock').textContent = formatDate('format|h:mm', d.getTime());
+    a.querySelector('.date').textContent = formatDate('format|EEEE, MMMM d', d.getTime());
+    // The forecast as it is now (a new one comes every 30 minutes), and only with the weather card on, as on Android.
+    a.querySelector('.temp').textContent = w ? Data.degrees(w.temp) : '';
+    a.querySelector('.cond').textContent = w ? Data.condition(w.code, w.isDay) : '';
+    // A clock that never moves burns into an OLED: the drift of Android's clock without photos (40 × 26 px, 10 minutes).
+    var phase = 2 * Math.PI * (d.getTime() / 1000 % 600) / 600, shift = a.querySelector('.shift');
+    shift.style.webkitTransform = shift.style.transform =
+      'translate(' + Math.round(40 * Math.sin(phase)) + 'px,' + Math.round(26 * Math.sin(2 * phase + 0.7)) + 'px)';
+  }
+
+  function hideAmbient() {
+    ambientOn = false;
+    clearInterval(ambientTimer);
+    setClass($('ambient'), 'on', false);
+  }
+
   function poke(ok) {
     idleAt = Date.now();
+    if (ambientOn) { hideAmbient(); return true; }
     if (!saverOn) return false;
     var app = ok && saverPick && Prefs.saverWatch() && Data.appFor(saverPick.app);
     hideSaver();
@@ -1747,12 +1838,14 @@
     });
   }
 
-  /** Back to the home screen (the app was opened again): the shelf, everything closed, the first tab. */
+  /** Back to the home screen (the app was opened again): the shelf, everything closed, the first tab at its first pick. */
   function reset() {
     hideSaver();
+    hideAmbient();
     closeSheets();
     st.zone = Z.SHELF;
     st.shelf = 0;
+    st.card = 0;
     var first = firstTab();
     if (st.tab !== first) { st.tab = first; renderCards(); }
     updateFocus();
@@ -1785,7 +1878,7 @@
   document.addEventListener('webOSRelaunch', reopened);   // LG: opened again while running
   window.addEventListener('appcontrol', reopened);        // Samsung: the same
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { hideSaver(); return; }
+    if (document.hidden) { hideSaver(); hideAmbient(); return; }
     idleAt = Date.now();
     loadApps(function () { renderShelf(); renderDrawer(); updateFocus(); Data.refresh(); });
   });
@@ -1793,9 +1886,10 @@
   I18N.set(Prefs.language());
   checkNight();   // now, from the last forecast: not after the TV lists its apps, with the day look until then
   // LG's screensaver waits only when ours will show: not under a sheet (ours waits there), and not without photos.
-  TV.holdScreenSaver(function () { return !sheetOpen() && saverPhotos().length > 0; });
+  TV.holdScreenSaver(function () { return !sheetOpen() && (saverMode() === 'clock' || saverPhotos().length > 0); });
   fit();
   renderTop();
+  applyDim();
   tickClock();
   loadApps(function () {
     renderAll();
@@ -1805,10 +1899,15 @@
   setInterval(function () {
     checkNight();
     Data.refresh();
-    if (!saverOn && !sheetOpen() && Date.now() - idleAt > SAVER_AFTER) showSaver();
+    applyDim();   // automatic: medium from 22:00, off again at 07:00
+    if (!saverOn && !ambientOn && !sheetOpen() && Date.now() - idleAt > SAVER_AFTER) {
+      if (saverMode() === 'clock') showAmbient(); else showSaver();
+    }
     if (saverOn) tickSaverClock($('saver').querySelector('.clock'));
+    if (ambientOn) tickAmbient();
   }, 30000);
 
   // For the browser preview and tests.
-  window.FreeMyTV = {state: st, move: move, activate: activate, back: back, showSaver: showSaver, hideSaver: hideSaver, toast: toast};
+  window.FreeMyTV = {state: st, move: move, activate: activate, back: back, showSaver: showSaver, hideSaver: hideSaver, toast: toast,
+    showAmbient: showAmbient, hideAmbient: hideAmbient, applyDim: applyDim};
 })();
