@@ -96,6 +96,7 @@ lan_server() {   # lan_server <key>: checks it; the host of an http:// one joins
 }
 lan_server immich_server
 lan_server home_assistant_url
+lan_server jellyfin_url
 # Keys that would let another app on the TV into the user's own servers stay out of the APK: tools/send_key.py sends
 # them to the TV (Secrets).
 for key in immich_api_key home_assistant_token; do

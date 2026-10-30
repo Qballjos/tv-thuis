@@ -83,7 +83,7 @@ final class Recs {
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 9;   // 9: portrait and landscape art, and the longer rows
+    private static final int CACHE_VERSION = 10;   // 10: Jellyfin on the home network can be reached again
     /** TMDB's titles in the list (trending, then the new releases), as on main. */
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
@@ -1210,6 +1210,15 @@ final class Recs {
         File f = imageFile(p);
         if (p.aio && (p.imageUrl == null || p.imageUrl.isEmpty())) return;
         if (p.imageUrl != null && !p.imageUrl.isEmpty()) {
+            if (f.exists() && p.posterUrl != null && !p.posterUrl.isEmpty() && !p.imageUrl.equals(p.posterUrl)) {
+                BitmapFactory.Options bounds = new BitmapFactory.Options();
+                bounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(f.getPath(), bounds);
+                if (bounds.outWidth > 0 && bounds.outHeight > bounds.outWidth) {
+                    //noinspection ResultOfMethodCallIgnored
+                    f.delete();   // a portrait was saved when the landscape download was blocked
+                }
+            }
             if (!f.exists()) fetchWide(f, p);
             File poster = posterFile(p);
             String tall = p.posterUrl != null && !p.posterUrl.isEmpty() ? p.posterUrl : p.imageUrl;
