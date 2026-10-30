@@ -52,7 +52,8 @@ final class Recs {
         String kind;            // "movie" or "tv"
         String title, backdrop, poster, meta = "", app, pkg;   // poster: the portrait image of the narrow cards
         String link;            // opens the title in its app (looked up with Watchmode), or null: the app's home
-        String imageUrl;        // a full image address (the media manager); null uses TMDB's backdrop path
+        String imageUrl;        // wide card: a landscape image (the media manager); null uses TMDB's backdrop path
+        String posterUrl;       // tall card: the portrait poster, when it is not the same file as imageUrl
         String servicePkg;      // open_in_stremio: the TV's own app it streams on (pkg is then Stremio's)
         String tag;             // Trakt: "Up next: S2 E5", "On your watchlist"…, first in the meta; else null
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
@@ -69,8 +70,9 @@ final class Recs {
 
     // TMDB's own mirror of api.themoviedb.org, on the images' domain: some ISPs block the other name (Jio, #327)
     private static final String API = "https://api.tmdb.org/3";
-    /** The most cards per tab and hour (Prefs.cards() picks how many, 3 by default); the home screen shows 3 at a time and scrolls. */
-    static final int MAX_CARDS = 6;
+    /** Cards per tab: at least 25, and Prefs.cards() up to this. The home screen shows a few at a time and scrolls. */
+    static final int MIN_CARDS = 25;
+    static final int MAX_CARDS = 40;
 
     /** The backdrops: on a 720p UI, TMDB's 1280-wide copy shows the same and is lighter to download and decode. */
     private static final String IMAGES = "https://image.tmdb.org/t/p/" + (Backdrop.W <= 1280 ? "w1280" : "original");
@@ -81,13 +83,13 @@ final class Recs {
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 8;   // 8: Trakt fields and the media-manager list together
+    private static final int CACHE_VERSION = 9;   // 9: portrait and landscape art, and the longer rows
     /** TMDB's titles in the list (trending, then the new releases), as on main. */
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
     private static final int TRAKT_MAX = MAX_CARDS;
-    /** Images kept on disk: a backdrop and a poster for every title the list can hold. */
-    private static final int FILES = 2 * (POOL + TRAKT_MAX);
+    /** Images kept on disk: a backdrop and a poster for every title the list can hold, and the media-manager rows. */
+    private static final int FILES = Math.max(200, 2 * (POOL + TRAKT_MAX));
     /** Pick.mine: what they're in the middle of, and what they'd like (watchlist, Trakt's recommendations). */
     private static final int PROGRESS = 1, LIKED = 2;
     private static final int MANHA = 0, TARDE = 1, NOITE = 2;
@@ -1208,11 +1210,12 @@ final class Recs {
         File f = imageFile(p);
         if (p.aio && (p.imageUrl == null || p.imageUrl.isEmpty())) return;
         if (p.imageUrl != null && !p.imageUrl.isEmpty()) {
-            if (!f.exists()) fetchFile(f, Aio.openImage(p.imageUrl));
+            if (!f.exists()) fetchWide(f, p);
             File poster = posterFile(p);
+            String tall = p.posterUrl != null && !p.posterUrl.isEmpty() ? p.posterUrl : p.imageUrl;
             if (poster != null && !poster.exists()) {
                 try {
-                    fetchFile(poster, Aio.openImage(p.imageUrl));
+                    fetchFile(poster, Aio.openImage(tall));
                 } catch (IOException e) {
                     AppLog.w("poster: " + e.getMessage());
                 }
@@ -1235,6 +1238,16 @@ final class Recs {
 
     private File posterFile(Pick p) {
         return p.poster == null || p.poster.isEmpty() ? null : new File(new File(context.getCacheDir(), "recs"), "p" + p.poster.replace("/", ""));
+    }
+
+    /** Landscape first. A title without one keeps the portrait poster, so the wide card is never empty. */
+    private void fetchWide(File f, Pick p) throws IOException {
+        try {
+            fetchFile(f, Aio.openImage(p.imageUrl));
+        } catch (IOException e) {
+            if (p.posterUrl == null || p.posterUrl.isEmpty() || p.posterUrl.equals(p.imageUrl)) throw e;
+            fetchFile(f, Aio.openImage(p.posterUrl));
+        }
     }
 
     private void fetchFile(File f, HttpURLConnection c) throws IOException {
@@ -1278,11 +1291,11 @@ final class Recs {
             boolean forLight = light;
             Backdrop backdrop = Backdrop.make(b, forLight);
             if (forLight != light) return;   // the design changed midway: this one is stale
-            Poster poster = forLight ? loadPoster(p) : null;
+            Poster poster = loadPoster(p);   // tall cards stay a poster, wide cards the landscape, in either design
             synchronized (images) {
                 images.put(p.backdrop, backdrop);
                 if (poster != null) posters.put(p.backdrop, poster);
-                while (images.size() > (forLight ? Prefs.cards() + 7 : 4)) images.remove(images.keySet().iterator().next());
+                while (images.size() > (forLight ? Prefs.cards() + 12 : 4)) images.remove(images.keySet().iterator().next());
                 posters.keySet().retainAll(images.keySet());
             }
             notifyListeners();
@@ -1352,6 +1365,7 @@ final class Recs {
                 a.put(new JSONObject().put("id", p.id).put("kind", p.kind).put("title", p.title).put("backdrop", p.backdrop)
                         .put("poster", p.poster == null ? "" : p.poster).put("link", p.link == null ? "" : p.link)
                         .put("imageUrl", p.imageUrl == null ? "" : p.imageUrl)
+                        .put("posterUrl", p.posterUrl == null ? "" : p.posterUrl)
                         .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
                         .put("servicePkg", p.servicePkg == null ? "" : p.servicePkg)
                         .put("tag", p.tag == null ? "" : p.tag).put("mine", p.mine)
@@ -1384,6 +1398,7 @@ final class Recs {
             p.poster = o.optString("poster");
             p.link = o.optString("link").isEmpty() ? null : o.optString("link");
             p.imageUrl = o.optString("imageUrl").isEmpty() ? null : o.optString("imageUrl");
+            p.posterUrl = o.optString("posterUrl").isEmpty() ? null : o.optString("posterUrl");
             p.meta = o.optString("meta");
             p.app = o.optString("app").isEmpty() ? null : o.optString("app");
             p.pkg = o.optString("pkg").isEmpty() ? null : o.optString("pkg");

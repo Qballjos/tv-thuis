@@ -805,7 +805,7 @@
       {label: tr('Screensaver'), value: saverMode() === 'clock' ? tr('Clock') : tr('Photos'),
         step: function (d) { cycle('saver', ['photos', 'clock'], saverMode(), d); }},
       {label: tr('Picks per tab'), value: String(Prefs.cards()),
-        step: function (d) { Prefs.set('cards', 3 + (Prefs.cards() - 3 + (d || 1) + 4) % 4); renderCards(); }},
+        step: function (d) { Prefs.set('cards', 25 + (Prefs.cards() - 25 + (d || 1) + 16) % 16); renderCards(); }},
       {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
         step: function () { Prefs.set('saverWatch', !Prefs.saverWatch()); }},
       {label: tr('Weather widget'), toggle: Prefs.weather(),
@@ -1665,7 +1665,6 @@
     saverPick = null;
     var s = $('saver');
     s.innerHTML = '';
-    setClass(s, 'amoled', Data.aioOn());
     var a = el('div', 'photo', s), b = el('div', 'photo', s);
     el('div', 'shade', s);
     var clock = el('div', 'clock', s);

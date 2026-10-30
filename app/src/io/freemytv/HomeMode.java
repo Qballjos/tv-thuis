@@ -131,6 +131,9 @@ final class HomeMode {
         "com.tcl.repairguide", "com.tcl.ocean.instructions", "com.tcl.logkit",        // repair guide, manual, logs
         "com.tcl.bi", "com.tcl.overseasappshow",                                      // TCL analytics; re-enables promo apps at boot
         "com.tcl.ttvs",                                                               // Samba TV and T-Cast (on some sets also the TCL updater)
+        "com.tcl.gallery",                                                            // Gallery
+        "com.tcl.ui_mediaCenter",                                                     // Media Player
+        "com.tcl.suspension",                                                         // Quick Panel
         // Philips (58PUS7304 is the 2019 7304 series, board TPM191E / PH9M_EA_5599, same list as the 43PUS7304)
         "org.droidtv.candeebug", "org.droidtv.gel",                                   // DAC analytics and its metrics collector
         "org.droidtv.usagelogger",                                                    // boot, keypress and panel telemetry
@@ -166,7 +169,7 @@ final class HomeMode {
     private static final Set<String> PROTECTED = new HashSet<>(Arrays.asList(
         "com.tvos", "com.tcl.systemserver", "com.tcl.systemui.plugin", "com.tcl.tv", "com.tcl.tvinput",
         "com.tcl.hearaid", "com.dolby.android.audio.service", "com.tcl.globalkeyoverlay", "com.tcl.autopair",
-        "com.tcl.UpdatePeripheral", "com.tcl.dashboard", "com.tcl.suspension", "com.tcl.providers.config",
+        "com.tcl.UpdatePeripheral", "com.tcl.dashboard", "com.tcl.providers.config",
         "com.tcl.gamebar", "com.tcl.airplay2", "com.mirakulo.astrotv.service", "com.tcl.initsetup",
         "com.tcl.useragreement", "com.tcl.factory.view", "com.tcl.guard", "com.tcl.t_solo",
         // TCL on Google TV (C825, Android 11): system server, Bluetooth remote and mic, keys, settings and quick menu,

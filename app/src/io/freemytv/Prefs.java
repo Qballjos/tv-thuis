@@ -187,9 +187,9 @@ final class Prefs {
 
     static void setTemperature(String v) { put("temperature", v); }
 
-    /** Picks per tab on the home screen: 3 (as it always was) up to Recs.MAX_CARDS. */
+    /** Picks per tab: at least Recs.MIN_CARDS, up to Recs.MAX_CARDS. A saved 3 from before is raised. */
     static int cards() {
-        return Math.max(3, Math.min(Recs.MAX_CARDS, sp().getInt("cards", 3)));
+        return Math.max(Recs.MIN_CARDS, Math.min(Recs.MAX_CARDS, sp().getInt("cards", Recs.MIN_CARDS)));
     }
 
     static void setCards(int n) { put("cards", n); }

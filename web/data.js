@@ -79,8 +79,8 @@ var Prefs = (function () {
     forecast: function () { return pick('forecast', 'hours') === 'days' ? 'days' : 'hours'; },
     quotes: function () { return pick('quotes', CONFIG.showCrypto !== false); },
     coin: function (i) { var c = pick('coins', null); return c ? c[i] !== false : true; },
-    /** Picks per tab: 3 (as it was) up to 6. */
-    cards: function () { var n = pick('cards', 3); return n < 3 ? 3 : n > 6 ? 6 : n; },
+    /** Picks per tab: at least 25, up to 40. A saved 3 from before is raised. */
+    cards: function () { var n = pick('cards', 25); return n < 25 ? 25 : n > 40 ? 40 : n; },
     shelf: function () { return pick('shelf', null); },
     /** The shelf_apps of the build that last set the shelf, so a new one wins once over the TV's choice. */
     shelfConfig: function () { return pick('shelfConfig', ''); },
@@ -412,7 +412,7 @@ var Data = (function () {
 
   function sourceStamp() {
     var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (CONFIG.hideAnimation ? ':no-animation' : '')
-        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey());
+        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey()) + ':art';
     for (var i = 0; i < SERVICES.length; i++) s += usable(SERVICES[i][1]) ? '1' : '0';
     return s;
   }
@@ -650,22 +650,46 @@ var Data = (function () {
     return isUuid(id) ? id : '';
   }
 
+  function jellyfinImage(id, kind, query) {
+    var base = Prefs.jellyfinUrl();
+    if (!base || !id) return '';
+    return base + '/Items/' + id + '/Images/' + kind + '?' + query;
+  }
+
   function aioPick(row, recent) {
     var kind = (row.mediaType || 'movie').toLowerCase();
     if (kind === 'series' || kind === 'show') kind = 'tv';
     if (kind !== 'tv') kind = 'movie';
     var itemId = libraryId(row);
     var id = row.mediaId || (itemId ? 0 : row.id) || 0;
+    var portrait = aioImage(row.poster || '') || jellyfinImage(itemId, 'Primary', 'maxHeight=780');
+    var landscape = aioImage(row.backdrop || '') || jellyfinImage(itemId, 'Backdrop', 'maxWidth=1280');
     return {
       aio: true, recent: recent, kind: kind, id: id, itemId: itemId,
       title: row.title || '',
       meta: row.detail || row.status || '',
-      poster: aioImage(row.poster || ''),
-      backdrop: aioImage(row.poster || ''),
+      poster: portrait || landscape,
+      backdrop: landscape || portrait,
       canRequest: !recent && !!(row.can_request || row.canRequest),
       mediaType: kind, mediaId: row.mediaId || id,
       detailed: true, app: recent || !(row.can_request || row.canRequest) ? 'library' : 'request'
     };
+  }
+
+  function jfAuth() {
+    var token = String(Prefs.jellyfinKey() || '').replace(/"/g, '');
+    return 'MediaBrowser Client="TV Thuis", Device="TV", DeviceId="freemytv", Version="1.0.0", Token="' + token + '"';
+  }
+
+  /** Jellyfin 10.11 and newer refuse a bare X-Emby-Token; the Authorization line has to name the app. */
+  function jfHeaders(x) {
+    var token = String(Prefs.jellyfinKey() || '').replace(/"/g, '');
+    if (!token) return;
+    var auth = jfAuth();
+    x.setRequestHeader('Authorization', auth);
+    x.setRequestHeader('X-Emby-Authorization', auth);
+    x.setRequestHeader('X-Emby-Token', token);
+    x.setRequestHeader('X-MediaBrowser-Token', token);
   }
 
   function jfGet(path, done) {
@@ -674,7 +698,7 @@ var Data = (function () {
     var x = new XMLHttpRequest(), over = false;
     x.open('GET', base + path, true);
     x.timeout = 12000;
-    x.setRequestHeader('X-Emby-Token', Prefs.jellyfinKey());
+    jfHeaders(x);
     x.setRequestHeader('Accept', 'application/json');
     x.onreadystatechange = function () {
       if (x.readyState !== 4 || over) return;
@@ -698,10 +722,11 @@ var Data = (function () {
       meta = !name || name === title ? code : code + ' · ' + name;
     } else if (item.ProductionYear) meta = String(item.ProductionYear);
     var imageId = isUuid(item.SeriesId) ? item.SeriesId : id;
-    var image = Prefs.jellyfinUrl() + '/Items/' + imageId + '/Images/Primary?maxWidth=780';
+    var portrait = jellyfinImage(imageId, 'Primary', 'maxHeight=780');
+    var landscape = jellyfinImage(imageId, 'Backdrop', 'maxWidth=1280');
     return {
       aio: true, resume: true, recent: false, kind: kind, id: n + 1, itemId: id,
-      title: title, meta: meta, poster: image, backdrop: image,
+      title: title, meta: meta, poster: portrait || landscape, backdrop: landscape || portrait,
       canRequest: false, mediaType: kind, mediaId: 0,
       detailed: true, app: 'library'
     };
@@ -709,7 +734,7 @@ var Data = (function () {
 
   function addResumeItems(items, into, seen) {
     if (!items) return;
-    for (var i = 0; i < items.length && into.length < 24; i++) {
+    for (var i = 0; i < items.length && into.length < 40; i++) {
       var p = resumePick(items[i], into.length);
       if (p && !seen[p.itemId]) { seen[p.itemId] = true; into.push(p); }
     }
@@ -718,16 +743,36 @@ var Data = (function () {
   function fetchResume(done) {
     if (!Prefs.jellyfinUrl() || !Prefs.jellyfinKey()) { done(null); return; }
     jfGet('/Users', function (err, users) {
-      if (err || !users || !users.length || !users[0].Id) { done(null); return; }
-      var user = users[0].Id;
-      jfGet('/Users/' + user + '/Items/Resume?Limit=16&Fields=ProductionYear,SeriesName', function (e1, resume) {
-        jfGet('/Shows/NextUp?userId=' + user + '&Limit=12&Fields=ProductionYear,SeriesName', function (e2, next) {
-          var rows = [], seen = {};
-          addResumeItems(resume && resume.Items, rows, seen);
-          addResumeItems(next && next.Items, rows, seen);
-          done(rows);
-        });
-      });
+      if (err || !users || !users.length) { done(null); return; }
+      var buckets = [], left = 0;
+      function finish() {
+        buckets.sort(function (a, b) { return b.length - a.length; });
+        var rows = [], seen = {};
+        for (var b = 0; b < buckets.length; b++) {
+          for (var i = 0; i < buckets[b].length && rows.length < 40; i++) {
+            var p = buckets[b][i];
+            if (!seen[p.itemId]) { seen[p.itemId] = true; rows.push(p); }
+          }
+        }
+        done(rows);
+      }
+      for (var u = 0; u < users.length; u++) {
+        if (!users[u] || !isUuid(users[u].Id)) continue;
+        left++;
+        (function (id) {
+          jfGet('/Users/' + id + '/Items/Resume?Limit=24&Fields=ProductionYear,SeriesName', function (e1, resume) {
+            jfGet('/Shows/NextUp?userId=' + id + '&Limit=16&Fields=ProductionYear,SeriesName', function (e2, next) {
+              var rows = [], seen = {};
+              addResumeItems(resume && resume.Items, rows, seen);
+              addResumeItems(next && next.Items, rows, seen);
+              if (rows.length) buckets.push(rows);
+              left--;
+              if (!left) finish();
+            });
+          });
+        })(users[u].Id);
+      }
+      if (!left) done(null);
     });
   }
 
@@ -736,16 +781,55 @@ var Data = (function () {
       if (err) { done(err); return; }
       aioCall('GET', '/api/homepage', null, function (e, home) {
         if (e) { done(e); return; }
-        var list = [];
-        var trending = home.trending || [], recent = home.recent || [];
-        for (var i = 0; i < trending.length; i++) if (trending[i].title) list.push(aioPick(trending[i], false));
-        for (var j = 0; j < recent.length; j++) if (recent[j].title) list.push(aioPick(recent[j], true));
-        fetchResume(function (rows) {
-          if (rows) for (var r = 0; r < rows.length; r++) list.push(rows[r]);
-          if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
-          picks = list;
-          done(null);
-        });
+        var list = [], seen = {};
+        function addRows(rows, recent) {
+          for (var i = 0; rows && i < rows.length; i++) {
+            if (!rows[i].title) continue;
+            var p = aioPick(rows[i], recent);
+            var key = (recent ? 'r:' : 't:') + (p.itemId || (p.id > 1000 ? p.kind + ':' + p.id : p.kind + ':' + p.title));
+            if (seen[key]) continue;
+            seen[key] = true;
+            list.push(p);
+          }
+        }
+        function countKind(kind, recent) {
+          var n = 0;
+          for (var i = 0; i < list.length; i++) if (list[i].recent === recent && list[i].kind === kind) n++;
+          return n;
+        }
+        addRows(home.trending, false);
+        addRows(home.recent, true);
+        var page = 2;
+        function moreTrending() {
+          if (page > 8 || (countKind('movie', false) >= 40 && countKind('tv', false) >= 40)) { moreRecent(1); return; }
+          aioCall('GET', '/api/homepage/trending?page=' + page, null, function (err2, more) {
+            var got = !err2 && more && more.items ? more.items.length : 0;
+            if (got) addRows(more.items, false);
+            if (err2 || !got) { moreRecent(1); return; }
+            page++;
+            moreTrending();
+          });
+        }
+        function moreRecent(rp) {
+          var n = 0;
+          for (var i = 0; i < list.length; i++) if (list[i].recent) n++;
+          if (rp > 4 || n >= 40) { finish(); return; }
+          aioCall('GET', '/api/homepage/recent?page=' + rp, null, function (err3, more) {
+            var got = !err3 && more && more.items ? more.items.length : 0;
+            if (got) addRows(more.items, true);
+            if (err3 || !got) { finish(); return; }
+            moreRecent(rp + 1);
+          });
+        }
+        function finish() {
+          fetchResume(function (rows) {
+            if (rows) for (var r = 0; r < rows.length; r++) list.push(rows[r]);
+            if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
+            picks = list;
+            done(null);
+          });
+        }
+        moreTrending();
       });
     });
   }
@@ -898,7 +982,7 @@ var Data = (function () {
       x.responseType = 'blob';
       x.timeout = 15000;
       if (Prefs.jellyfinUrl() && url.indexOf(Prefs.jellyfinUrl()) === 0 && Prefs.jellyfinKey()) {
-        x.setRequestHeader('X-Emby-Token', Prefs.jellyfinKey());
+        jfHeaders(x);
       } else if (Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
       x.onload = function () {
         if (x.status === 200 && x.response) done(URL.createObjectURL(x.response));

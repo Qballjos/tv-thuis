@@ -183,7 +183,10 @@ final class HomeApps {
             "com.google.android.youtube.tv",        // YouTube: SmartTube and its bridge take this
             "com.amazon.firetv.youtube",
             "com.disney.starplus",                  // Star+ (merged into Disney+)
-            "com.tcl.exhibit"));                    // TCL: T-Exhibition
+            "com.tcl.exhibit",                      // TCL: T-Exhibition
+            "com.tcl.gallery",                      // TCL: Gallery
+            "com.tcl.ui_mediaCenter",               // TCL: Media Player
+            "com.tcl.suspension"));                 // TCL: Quick Panel
 
     /**
      * System apps with only a phone launcher entry that still belong in "All Apps". Fire TV's Appstore has no TV banner

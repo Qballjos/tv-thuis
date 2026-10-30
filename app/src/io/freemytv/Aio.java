@@ -94,12 +94,35 @@ final class Aio {
         }
     }
 
-    /** Trending titles and recently added movies and shows. */
+    /** Enough titles that franchise dedup still leaves a full row (Prefs.cards() is at least 25). */
+    private static final int RAIL = 40;
+
+    /** Trending titles and recently added movies and shows. The snapshot is one short page; the rest is paged. */
     static void fill(List<Recs.Pick> trending, List<Recs.Pick> recent) throws IOException {
         ensureToken();
         JSONObject home = get("/api/homepage");
         readCards(array(home, "trending"), trending, false);
         readCards(array(home, "recent"), recent, true);
+        for (int page = 2; page <= 8 && (countKind(trending, "movie") < RAIL || countKind(trending, "tv") < RAIL); page++) {
+            JSONArray items;
+            try {
+                items = array(get("/api/homepage/trending?page=" + page), "items");
+            } catch (IOException e) {
+                break;
+            }
+            if (items.length() == 0) break;
+            readCards(items, trending, false);
+        }
+        for (int page = 1; page <= 4 && recent.size() < RAIL; page++) {
+            JSONArray items;
+            try {
+                items = array(get("/api/homepage/recent?page=" + page), "items");
+            } catch (IOException e) {
+                break;
+            }
+            if (items.length() == 0) break;
+            readCards(items, recent, true);
+        }
         if (trending.isEmpty() && recent.isEmpty()) throw new IOException(Ui.tr("The media manager returned no titles."));
     }
 
@@ -150,8 +173,14 @@ final class Aio {
         c.setReadTimeout(20000);
         c.setInstanceFollowRedirects(true);
         if (onServer(url)) c.setRequestProperty("Authorization", "Bearer " + Prefs.aioToken());
-        else if (onJellyfin(url) && !Prefs.jellyfinKey().isEmpty()) c.setRequestProperty("X-Emby-Token", Prefs.jellyfinKey());
+        else if (onJellyfin(url)) jellyfinAuth(c);
         return c;
+    }
+
+    /** Jellyfin Primary is the portrait poster; Backdrop is the landscape art. Empty without a server or an item id. */
+    private static String jellyfinImage(String itemId, String kind, String query) {
+        if (itemId == null || itemId.isEmpty() || Prefs.jellyfinUrl().isEmpty()) return "";
+        return Prefs.jellyfinUrl() + "/Items/" + itemId + "/Images/" + kind + "?" + query;
     }
 
     /** Public poster URLs get a size the TV can show; manager paths stay as they are. */
@@ -164,6 +193,8 @@ final class Aio {
     }
 
     private static void readCards(JSONArray rows, List<Recs.Pick> into, boolean recent) {
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        for (Recs.Pick have : into) seen.add(cardKey(have));
         for (int i = 0; i < rows.length(); i++) {
             JSONObject row = rows.optJSONObject(i);
             if (row == null) continue;
@@ -173,23 +204,43 @@ final class Aio {
             p.aio = true;
             p.recent = recent;
             p.kind = kind(row.optString("mediaType", recent ? "movie" : "movie"));
-            p.id = row.optInt("mediaId", 0);
-            if (p.id == 0) p.id = i + 1;
+            int mediaId = row.optInt("mediaId", 0);
+            p.id = mediaId > 0 ? mediaId : into.size() + i + 1;
             p.itemId = libraryId(row);
             p.title = title;
             p.canRequest = !recent && (row.has("can_request") ? row.optBoolean("can_request") : row.optBoolean("canRequest"));
             String detail = row.optString("detail", "");
             String status = row.optString("status", "");
             p.meta = status.isEmpty() ? detail : (detail.isEmpty() ? statusLabel(status) : detail + " · " + statusLabel(status));
-            p.imageUrl = imageUrl(row.optString("poster", ""));
+            String portrait = imageUrl(row.optString("poster", ""));
+            String landscape = imageUrl(row.optString("backdrop", ""));
+            if (landscape.isEmpty()) landscape = jellyfinImage(p.itemId, "Backdrop", "maxWidth=1280");
+            if (portrait.isEmpty()) portrait = jellyfinImage(p.itemId, "Primary", "maxHeight=780");
+            p.imageUrl = !landscape.isEmpty() ? landscape : portrait;   // wide card
+            p.posterUrl = !portrait.isEmpty() ? portrait : p.imageUrl;  // tall card
             String token = p.itemId != null ? p.itemId : p.kind + "-" + p.id;
             p.backdrop = "aio-" + (recent ? "r-" : "t-") + token;
             p.poster = p.backdrop;
             p.detailed = true;
             p.app = p.canRequest ? "request" : "library";
             p.pkg = "aio";
+            if (!seen.add(cardKey(p))) continue;
             into.add(p);
         }
+    }
+
+    /** A small id is the row index given when Seerr sent no mediaId, so the title keeps later pages apart. */
+    private static String cardKey(Recs.Pick p) {
+        String side = p.recent ? "r:" : "t:";
+        if (p.itemId != null) return side + p.itemId;
+        if (p.id > 1000) return side + p.kind + ":" + p.id;
+        return side + p.kind + ":" + p.title;
+    }
+
+    private static int countKind(List<Recs.Pick> list, String kind) {
+        int n = 0;
+        for (Recs.Pick p : list) if (kind.equals(p.kind)) n++;
+        return n;
     }
 
     private static String statusLabel(String status) {
@@ -314,21 +365,37 @@ final class Aio {
         return true;
     }
 
-    /** In-progress and next-up items from Jellyfin, in that order. No-op until a server and API key are saved. */
+    /**
+     * In-progress and next-up items from every Jellyfin account, fullest first.
+     * The first user Jellyfin lists often has nothing in progress. No-op until a server and API key are saved.
+     */
     static void resume(List<Recs.Pick> into) throws IOException {
         if (Prefs.jellyfinUrl().isEmpty() || Prefs.jellyfinKey().isEmpty()) return;
         JSONArray users = jfList("/Users");
-        if (users.length() == 0) return;
-        String user = users.optJSONObject(0) == null ? "" : users.optJSONObject(0).optString("Id", "");
-        if (!uuid(user)) return;
+        List<List<Recs.Pick>> buckets = new ArrayList<>();
+        for (int u = 0; u < users.length(); u++) {
+            JSONObject user = users.optJSONObject(u);
+            String id = user == null ? "" : user.optString("Id", "");
+            if (!uuid(id)) continue;
+            List<Recs.Pick> rows = new ArrayList<>();
+            java.util.HashSet<String> one = new java.util.HashSet<>();
+            addResume(rows, one, jfItems("/Users/" + id + "/Items/Resume?Limit=24&Fields=ProductionYear,SeriesName"));
+            addResume(rows, one, jfItems("/Shows/NextUp?userId=" + id + "&Limit=16&Fields=ProductionYear,SeriesName"));
+            if (!rows.isEmpty()) buckets.add(rows);
+        }
+        buckets.sort((a, b) -> Integer.compare(b.size(), a.size()));
         java.util.HashSet<String> seen = new java.util.HashSet<>();
-        addResume(into, seen, jfItems("/Users/" + user + "/Items/Resume?Limit=16&Fields=ProductionYear,SeriesName"));
-        addResume(into, seen, jfItems("/Shows/NextUp?userId=" + user + "&Limit=12&Fields=ProductionYear,SeriesName"));
+        for (List<Recs.Pick> rows : buckets) {
+            for (Recs.Pick p : rows) {
+                if (into.size() >= RAIL) return;
+                if (p.itemId != null && seen.add(p.itemId)) into.add(p);
+            }
+        }
     }
 
     private static void addResume(List<Recs.Pick> into, java.util.HashSet<String> seen, JSONArray items) {
         String base = Prefs.jellyfinUrl();
-        for (int i = 0; i < items.length() && into.size() < 24; i++) {
+        for (int i = 0; i < items.length() && into.size() < RAIL; i++) {
             JSONObject item = items.optJSONObject(i);
             if (item == null) continue;
             String id = item.optString("Id", "");
@@ -359,7 +426,9 @@ final class Aio {
             }
             String imageId = item.optString("SeriesId", "");
             if (!uuid(imageId)) imageId = id;
-            p.imageUrl = base + "/Items/" + imageId + "/Images/Primary?maxWidth=780";
+            p.posterUrl = jellyfinImage(imageId, "Primary", "maxHeight=780");
+            p.imageUrl = jellyfinImage(imageId, "Backdrop", "maxWidth=1280");
+            if (p.imageUrl.isEmpty()) p.imageUrl = p.posterUrl;
             p.backdrop = "aio-c-" + id;
             p.poster = p.backdrop;
             into.add(p);
@@ -390,12 +459,24 @@ final class Aio {
         HttpURLConnection c = (HttpURLConnection) new URL(Prefs.jellyfinUrl() + path).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
-        c.setRequestProperty("X-Emby-Token", Prefs.jellyfinKey());
+        jellyfinAuth(c);
         c.setRequestProperty("Accept", "application/json");
         int code = c.getResponseCode();
         String text = read(code >= 400 ? c.getErrorStream() : c.getInputStream());
         if (code >= 400) throw new IOException("HTTP " + code);
         return text;
+    }
+
+    /** Jellyfin 10.11 and newer refuse a bare X-Emby-Token; the Authorization line has to name the app. */
+    private static void jellyfinAuth(HttpURLConnection c) {
+        String token = Prefs.jellyfinKey().replace("\"", "");
+        if (token.isEmpty()) return;
+        String auth = "MediaBrowser Client=\"TV Thuis\", Device=\"TV\", DeviceId=\"freemytv\", Version=\"1.0.0\", Token=\""
+                + token + "\"";
+        c.setRequestProperty("Authorization", auth);
+        c.setRequestProperty("X-Emby-Authorization", auth);
+        c.setRequestProperty("X-Emby-Token", token);
+        c.setRequestProperty("X-MediaBrowser-Token", token);
     }
 
     private static String read(InputStream in) throws IOException {

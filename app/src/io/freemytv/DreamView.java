@@ -286,7 +286,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     // MARK: - Photos
 
-    /** Trending posters when the media manager is set up; otherwise your photos, or the picks. */
+    /** Landscape movie art when the media manager is set up; otherwise your photos, or the picks. */
     private List<Recs.Pick> photos() {
         if (Aio.configured()) return recs.showcase();
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
@@ -334,11 +334,8 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             Bitmap[] images = null;
             float[] light = new float[2];
             try {
-                if (chosen.aio) images = Backdrop.contain(file, PW, PH, light);
-                else {
-                    images = Backdrop.photo(file, PW, PH, light);
-                    images[0] = withScrims(images[0], chosen.photo == null, light[0], light[1]);
-                }
+                images = Backdrop.photo(file, PW, PH, light);   // center-cropped so the movie art fills the screen
+                images[0] = withScrims(images[0], chosen.photo == null, light[0], light[1]);
                 images[0] = Backdrop.gpu(images[0]);
             } catch (Exception | OutOfMemoryError e) {
                 AppLog.w("screensaver: photo for “" + (chosen.photo != null ? chosen.photo.getName() : chosen.title) + "”: " + e.getMessage());

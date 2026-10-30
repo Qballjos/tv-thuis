@@ -1405,8 +1405,8 @@ public class SettingsActivity extends Activity {
             if (unavailable(focus) != null && !turnOff) return;
             if (screen == PICKS) {
                 if (focus == 0) {
-                    int n = Prefs.cards() - 3, span = Recs.MAX_CARDS - 3 + 1;
-                    Prefs.setCards(3 + (n + dir + span) % span);
+                    int n = Prefs.cards() - Recs.MIN_CARDS, span = Recs.MAX_CARDS - Recs.MIN_CARDS + 1;
+                    Prefs.setCards(Recs.MIN_CARDS + (n + dir + span) % span);
                 }
                 return;
             }
