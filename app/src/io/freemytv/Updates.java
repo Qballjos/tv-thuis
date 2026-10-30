@@ -31,11 +31,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 
 /**
- * Updates from GitHub's releases (Android only). Once a week, and from Home Settings > Updates, the latest release is
- * looked up; a newer one's FreeMyTV.apk is downloaded and checked (GitHub's size and SHA-256, a newer version, the
- * project's key), then handed on OK to Android's installer, which asks before installing. Only the APK from the
- * releases (--generic, the project's key) takes them: a build made on a computer has its own key and config, so it's
- * only told that a new version is out, and only when asked (nothing in the background could come of it).
+ * Updates from this fork's GitHub releases (Android only). Once a week, and from Home Settings > Updates, the latest
+ * release on Qballjos/tv-thuis is looked up; a newer one's FreeMyTV.apk is downloaded and checked (GitHub's size and
+ * SHA-256, a newer version, the same key as the app already on the TV), then handed on OK to Android's installer,
+ * which asks before installing. A build signed with another key is only told that a new version is out.
  *
  * Checks and installs run in the main process (ModeJob, HomeReceiver), one at a time under this class's lock, and only
  * they write update.json; Settings, in :home, reads it, and the home screen keeps what it told in update-told.
@@ -43,11 +42,11 @@ import java.security.MessageDigest;
 final class Updates {
     private Updates() {}
 
-    private static final String LATEST = "https://api.github.com/repos/simbasjungles/free-my-tv/releases/latest";
-    // The only place the APK may come from: this repository's releases (github.com redirects to its download host).
-    private static final String RELEASES = "https://github.com/simbasjungles/free-my-tv/releases/download/";
-    // The release key's certificate, as `apksigner verify --print-certs` shows it: only APKs signed with it come in.
-    private static final String RELEASE_CERT = "b85d4ff69cb42bfb1837ee0279506363954470b16402a4165f2f095886d19204";
+    private static final String LATEST = "https://api.github.com/repos/Qballjos/tv-thuis/releases/latest";
+    // The only place the APK may come from: this fork's releases (github.com redirects to its download host).
+    private static final String RELEASES = "https://github.com/Qballjos/tv-thuis/releases/download/";
+    // freemytv.keystore, as `apksigner verify --print-certs` shows it: only APKs signed with it come in.
+    private static final String RELEASE_CERT = "94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138";
     private static final String ASSET = "FreeMyTV.apk";
     private static final long MAX_SIZE = 30L << 20;   // the APK is about 1.5 MB
     private static final long WEEK = 7 * 24 * 3600_000L;
@@ -63,9 +62,8 @@ final class Updates {
 
     private static Boolean releaseKey;   // this app is signed with the release key (read once per process)
 
-    /** The APK from the releases: built with --generic and signed with the project's key, so it can take the next. */
+    /** This install is signed with freemytv.keystore, so the next release from this fork can replace it. */
     static boolean takesReleases(Context c) {
-        if (!Config.GENERIC) return false;
         if (releaseKey == null) {
             boolean is;
             try {

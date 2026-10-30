@@ -213,11 +213,12 @@ TizenBrew Installer takes the first `.wgt` of the latest GitHub release, so ever
 with a Tizen certificate (`--sign`), which 2017-2022 TVs install as it is; on 2023+ TVs the installer signs it again
 with the person's Samsung certificate. Sign every release with the same author certificate: older TVs refuse an
 update signed by another. `python3 webos/build.py --generic` makes the LG `.ipk` that goes along.
-The release's `FreeMyTV.apk` updates itself (`Updates`: a weekly job, and Home Settings > Updates): it reads
-`releases/latest`, so keep the asset named `FreeMyTV.apk`, sign it with the project's key, and raise `versionName`
+This fork's `FreeMyTV.apk` updates itself from Qballjos/tv-thuis (`Updates`: a weekly job, and Home Settings >
+Updates): it reads that repo's `releases/latest`, so keep the asset named `FreeMyTV.apk`, sign it with
+`freemytv.keystore` (the key already on these TVs, not the upstream release key), and raise `versionName`
 (compared number by number with the tag, `v1.3.0` > `1.2`) and `versionCode` (Android refuses a lower one). Before
-uploading, `apksigner verify --print-certs FreeMyTV.apk` must show the release certificate
-(`b85d4ff69cb42bfb1837ee0279506363954470b16402a4165f2f095886d19204`, `Updates.RELEASE_CERT`): TVs refuse any other. Then
+uploading, `apksigner verify --print-certs FreeMyTV.apk` must show this fork's certificate
+(`94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138`, `Updates.RELEASE_CERT`): TVs refuse any other. Then
 `python3 tools/homebrew_repo.py <the uploaded FreeMyTV-webos.ipk>` writes `docs/webos/apps.json`, the webOS Homebrew
 Channel repository (https://freemytv.io/webos/apps.json, with that file's SHA-256), and a copy of the `.ipk` beside it:
 commit both with the release. The Channel installs from freemytv.io, not from the GitHub release, because GitHub's
@@ -290,10 +291,10 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   the home screen in memory under the app in front; the remote's key service lives in `:keys` (below).
   `Watchdog` goes back to the stock home screen after 3 crashes in 5 minutes.
   `Updates` (the release APK updating itself) runs there too: the week's check and Settings' OK are `ModeJob`s, one at
-  a time, and they write `update.json`, which Settings only reads. The download must be this repository's release
-  asset (its size and SHA-256 as GitHub lists them), newer than the app (versionName and versionCode) and signed with
-  the release key (`Updates.RELEASE_CERT`); Android's installer always asks. A build made on a computer (not
-  `--generic`, or another key) checks only when asked and never downloads.
+  a time, and they write `update.json`, which Settings only reads. The download must be this fork's release asset on
+  Qballjos/tv-thuis (its size and SHA-256 as GitHub lists them), newer than the app (versionName and versionCode) and
+  signed with `freemytv.keystore` (`Updates.RELEASE_CERT`); Android's installer always asks. A build signed with
+  another key checks only when asked and never downloads.
 - The TMDB key given on the TV (`Prefs.tmdbKey`) wins over `Config.TMDB_KEY`; read it through `Recs.key()`. Its screen
   serves a one-time page (`KeyPage`: the TV's private IPv4 on Wi-Fi or Ethernet, never a VPN's or a public one, a random
   port and token, one POST, 5 minutes, and only while that screen shows) behind a QR code (`Qr`, byte mode, level M, after

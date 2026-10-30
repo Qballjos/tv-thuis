@@ -108,6 +108,7 @@ final class Prefs {
     static void init(Context c) {
         app = c.getApplicationContext();
         migrateKeys();   // before anything reads the button choices
+        keepBuiltIn();   // the next release has no config.properties, so these stay on the TV
         Ui.applyLanguage();   // the language picked on the TV, now that it can be read
     }
 
@@ -424,6 +425,38 @@ final class Prefs {
         if (app == null) return;
         sp().edit().putString("jellyfinKey", key == null ? "" : key.trim()).commit();
         version++;
+    }
+
+    /**
+     * Writes the build's household settings once, into the TV's private storage. A later update from GitHub is built
+     * without config.properties, and these values would otherwise go with it.
+     */
+    private static void keepBuiltIn() {
+        SharedPreferences s = sp();
+        SharedPreferences.Editor e = s.edit();
+        boolean changed = false;
+        if (!s.contains("tmdbKey") && !Config.TMDB_KEY.trim().isEmpty()) {
+            e.putString("tmdbKey", Config.TMDB_KEY.trim());
+            changed = true;
+        }
+        if (!s.contains("aioUrl") && !Config.AIO_URL.trim().isEmpty()) {
+            e.putString("aioUrl", Config.AIO_URL.trim());
+            e.putString("aioUser", Config.AIO_USER == null ? "" : Config.AIO_USER.trim());
+            e.putString("aioPassword", Config.AIO_PASSWORD == null ? "" : Config.AIO_PASSWORD);
+            changed = true;
+        }
+        if (!s.contains("jellyfinUrl") && !Config.JELLYFIN_URL.trim().isEmpty()) {
+            e.putString("jellyfinUrl", Config.JELLYFIN_URL.trim());
+            e.putString("jellyfinKey", Config.JELLYFIN_KEY == null ? "" : Config.JELLYFIN_KEY.trim());
+            changed = true;
+        }
+        if (!s.contains("city") && !Config.CITY.trim().isEmpty()) {
+            e.putString("city", Config.CITY.trim());
+            e.putString("latitude", Config.LATITUDE.trim());
+            e.putString("longitude", Config.LONGITUDE.trim());
+            changed = true;
+        }
+        if (changed) e.commit();
     }
 
     /** Copies the build's values the first time the TV saves one field, so the others are not lost. */
