@@ -267,6 +267,9 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   the origin/link and saves a scoped device token atomically; legacy manual login remains available. Device credentials
   (`aioDeviceId` included) are shared across launcher profiles. Paired Continue Watching goes through AIO, with no
   Jellyfin key on the TV. `Aio.test` must never discard a paired token. Server administration is outside its scope.
+  AIO home tabs are Resume, Recent, Movies (owned library), Shows (owned library), Trending (requestable picks).
+  Library pages append by stable item ID as focus nears the end; never apply recommendation/franchise limits to them.
+  Prepare only nearby card artwork and grow card springs/bounds outside drawing when pages append.
   `AioHttp` keeps HTTPS certificate checks and disables credential redirects. Runtime plain HTTP is pinned to private
   IPv4 addresses at the socket boundary; never relax global `network_security_config` for arbitrary hosts.
 
@@ -349,8 +352,6 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   photos. `tools/photos.py`'s are never deleted. Redirects are never followed (`x-api-key` would go
   along to another host).
 - Screensaver's `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
-  AIO art alternates trending and recently added titles; recent copies win over duplicate franchises, and Continue
-  Watching stays out of the slideshow (`Recs.aioShowcase`, mirrored in `web/data.js`).
   An empty/loading selected album uses the clock fallback, never other photos or movie art.
   `PhotoCollage` prepares up to three framed photos on the worker; the existing slideshow handles fades and keys.
   Imports retain the full aspect ratio and capture date only (no GPS); older cropped copies still work.

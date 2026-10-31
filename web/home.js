@@ -360,6 +360,8 @@
     focusRows($('keypick'), st.zone === Z.AIO ? st.aio : st.key, st.zone === Z.KEY || st.zone === Z.AIO);
     setClass(body, 'drawer-open', st.zone === Z.DRAWER);
     followSoon();
+    loadCardImages();
+    if (Data.aioTop() && st.card >= cards.length - 4) Data.moreLibrary(tabKind(st.tab));
   }
 
   function focusRows(sheet, index, on) {
@@ -388,11 +390,11 @@
 
   // MARK: - Top: title, tabs, buttons, quotes
 
-  function tabCount() { return Data.aioTop() ? 4 : 3; }
+  function tabCount() { return Data.aioTop() ? 5 : 3; }
 
   function tabKind(i) {
     if (!Data.aioTop()) return i === 0 ? null : i === 1 ? 'movie' : 'tv';
-    return i === 0 ? 'resume' : i === 1 ? 'recent' : i === 2 ? 'movie' : 'tv';
+    return i === 0 ? 'resume' : i === 1 ? 'recent' : i === 2 ? 'movie' : i === 3 ? 'tv' : 'trending';
   }
 
   /** Continue watching when it has titles, otherwise the first tab that does. */
@@ -407,7 +409,7 @@
     var tabs = $('tabs');
     tabs.innerHTML = '';
     var names = Data.aioTop()
-      ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows')]
+      ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows'), tr('TRENDING')]
       : [tr('Explore'), tr('Movies'), tr('Shows')];
     for (var i = 0; i < names.length; i++) {
       var t = el('button', 'tab', tabs, names[i]);
@@ -448,13 +450,14 @@
     for (var i = 0; same && i < list.length; i++) same = list[i].id === cards[i].id && list[i].backdrop === cards[i].backdrop && list[i].meta === cards[i].meta;
     if (same && holder.children.length === list.length) return;
     cards = list;
+    var oldImages = holder.querySelectorAll('.img .layer');
+    for (var old = 0; old < oldImages.length; old++) releaseImage(oldImages[old]);
     holder.innerHTML = '';
     for (var c = 0; c < list.length; c++) {
       var p = list[c], card = el('div', 'card', holder);
       var img = el('div', 'img', card);
       // Narrow: the poster (the backdrop cropped without one); the wide card fades its backdrop in over it, loaded then.
       var poster = el('div', 'layer', img);
-      paint(poster, p.poster || p.backdrop, p.poster ? 'w342' : 'w780');
       el('div', 'layer back', img);
       el('div', 'name', card, p.title);
       if (p.meta) el('div', 'meta', card, p.meta);
@@ -464,6 +467,17 @@
     if (!list.length && st.zone === Z.CARDS) st.zone = Z.SHELF;
     backdrop(list.length ? Data.image(list[st.card].backdrop, 'w300') : '');
     updateFocus();
+  }
+
+  function loadCardImages() {
+    var nodes = $('cards').children;
+    for (var i = 0; i < nodes.length; i++) {
+      var layers = nodes[i].querySelectorAll('.img .layer');
+      if (i < st.card - 2 || i >= st.card + 6) {
+        for (var j = 0; j < layers.length; j++) releaseImage(layers[j]);
+        nodes[i].removeAttribute('data-back');
+      } else if (cards[i]) paint(layers[0], cards[i].poster || cards[i].backdrop, cards[i].poster ? 'w342' : 'w780');
+    }
   }
 
   /**
@@ -516,9 +530,24 @@
   function paint(node, path, size) {
     if (!node) return;
     var src = Data.image(path, size);
+    if (node._artSource === src) return;
+    releaseImage(node);
     if (!src) return;
-    if (Data.needsAuth(src)) Data.loadImage(src, function (blob) { if (blob) node.style.backgroundImage = 'url(' + blob + ')'; });
+    node._artSource = src;
+    var generation = node._artGeneration;
+    if (Data.needsAuth(src)) Data.loadImage(src, function (blob) {
+      if (node._artGeneration !== generation) { if (blob) URL.revokeObjectURL(blob); return; }
+      if (blob) { node._artBlob = blob; node.style.backgroundImage = 'url(' + blob + ')'; }
+      else node._artSource = '';
+    });
     else node.style.backgroundImage = 'url(' + src + ')';
+  }
+
+  function releaseImage(node) {
+    node._artGeneration = (node._artGeneration || 0) + 1;
+    if (node._artBlob) URL.revokeObjectURL(node._artBlob);
+    node._artBlob = node._artSource = '';
+    node.style.backgroundImage = '';
   }
 
   // As HomeView's bgFollow: the background follows the focused pick.
@@ -1692,7 +1721,7 @@
 
   /** The screensaver's photos: picks with an app on the TV. */
   function saverPhotos() {
-    if (Data.aioOn()) return Data.showcase();
+    if (Data.aioOn()) return Data.showcase().filter(function (p) { return p.backdrop && !p.recent; });
     return Data.showcase().filter(function (p) { return p.backdrop && Data.usable(p.app); });
   }
 
