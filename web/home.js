@@ -1692,7 +1692,7 @@
 
   /** The screensaver's photos: picks with an app on the TV. */
   function saverPhotos() {
-    if (Data.aioOn()) return Data.showcase().filter(function (p) { return p.backdrop && !p.recent; });
+    if (Data.aioOn()) return Data.showcase();
     return Data.showcase().filter(function (p) { return p.backdrop && Data.usable(p.app); });
   }
 

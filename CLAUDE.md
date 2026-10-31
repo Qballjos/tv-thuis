@@ -349,6 +349,8 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   photos. `tools/photos.py`'s are never deleted. Redirects are never followed (`x-api-key` would go
   along to another host).
 - Screensaver's `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
+  AIO art alternates trending and recently added titles; recent copies win over duplicate franchises, and Continue
+  Watching stays out of the slideshow (`Recs.aioShowcase`, mirrored in `web/data.js`).
   An empty/loading selected album uses the clock fallback, never other photos or movie art.
   `PhotoCollage` prepares up to three framed photos on the worker; the existing slideshow handles fades and keys.
   Imports retain the full aspect ratio and capture date only (no GPS); older cropped copies still work.

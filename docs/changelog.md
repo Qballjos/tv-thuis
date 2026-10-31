@@ -4,6 +4,9 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+- De AIO-schermbeveiliging wisselt trendingtitels af met nieuw toegevoegde films en series. Dubbele titels worden
+  samengevoegd, met voorrang voor de bibliotheekversie. Android toont hierbij het passende bronlabel.
+
 - **Koppelen met AIO** via QR en een eenmalige koppellink uit het AIO-dashboard. De tv neemt het serveradres over
   en bewaart een eigen intrekbaar token; AIO-wachtwoorden en Jellyfin-sleutels hoeven niet meer op de tv.
 - Verder kijken kan via de gekoppelde AIO-server; handmatig instellen blijft beschikbaar voor oudere AIO-versies.

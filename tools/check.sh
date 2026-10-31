@@ -23,10 +23,12 @@ if [ "$what" = all ] || [ "$what" = android ]; then
   bash tools/check-photo-collage.sh
   bash tools/check-immich-source.sh
   bash tools/check-aio-pairing.sh
+  bash tools/check-aio-showcase.sh
 fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then
   python3 tools/translate.py --check
+  node tools/test-aio-showcase.js
 
   # The generic LG and Samsung packages land where your own build leaves yours (with your city and TMDB key):
   # keep yours and put them back afterwards, so the next install isn't the generic one.
