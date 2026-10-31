@@ -263,6 +263,13 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
 
 ## The code
 
+- AIO pairing uses the existing temporary `KeyPage` QR form with a one-use AIO dashboard link. `AioPairing` validates
+  the origin/link and saves a scoped device token atomically; legacy manual login remains available. Device credentials
+  (`aioDeviceId` included) are shared across launcher profiles. Paired Continue Watching goes through AIO, with no
+  Jellyfin key on the TV. `Aio.test` must never discard a paired token. Server administration is outside its scope.
+  `AioHttp` keeps HTTPS certificate checks and disables credential redirects. Runtime plain HTTP is pinned to private
+  IPv4 addresses at the socket boundary; never relax global `network_security_config` for arbitrary hosts.
+
 - Java 8 language level, minSdk 26 (Android 8), targetSdk 33. No Gradle, no libraries: only the Android SDK.
   Android 9 and older have no RenderNode (`Recording` wraps it, with a Picture there) and no `cmd role`. On Android 8 to 11,
   and on Android 12 and 12L under 3 GB of RAM (`Ui.LEGACY`), the home screen skips the GPU layers, draws blurred

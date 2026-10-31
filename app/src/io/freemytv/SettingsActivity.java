@@ -194,6 +194,9 @@ public class SettingsActivity extends Activity {
         private int[] keyRowIds = new int[0];
         private StaticLayout keyPurpose, keySteps, keyStatus;
         private String keyHelp;   // the purpose and the steps, for TalkBack
+        private boolean pairingAio;
+        private final Object pairingLock = new Object();
+        private int pairingGeneration;
         private Paint keyHeading, keyUrl, qrPaint, qrSlot;
         // Continue Watching apps: {package, name}, null until the background scan is done; hidden items when opened.
         private List<String[]> watchApps;
@@ -346,6 +349,7 @@ public class SettingsActivity extends Activity {
                 case REMOTE_KEYS:
                 case PICKS:
                 case POWER:
+                case AIO:
                 case SAVER: {
                     boolean keys = screen == REMOTE_KEYS;
                     String[] labels = listLabels(), values = listValues();
@@ -1352,14 +1356,19 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] aioLabels() {
-            return new String[] {Ui.tr("AIO server"), Ui.tr("Username"), Ui.tr("Password"),
+            if (Prefs.aioPaired()) return new String[] {Ui.tr("Connect with AIO"), Ui.tr("Search and request"),
+                    Ui.tr("Test connection"), Ui.tr("Disconnect AIO")};
+            return new String[] {Ui.tr("Connect with AIO"), Ui.tr("AIO server"), Ui.tr("Username"), Ui.tr("Password"),
                     Ui.tr("Jellyfin server"), Ui.tr("Jellyfin API key"),
                     Ui.tr("Search and request"), Ui.tr("Test connection")};
         }
 
         private String[] aioValues() {
             String host = Prefs.aioUrl();
+            String status = aioBusy ? Ui.tr("Checking…") : (aioStatus.isEmpty() ? "›" : aioStatus);
+            if (Prefs.aioPaired()) return new String[] {host, "›", status, "›"};
             return new String[] {
+                    "›",
                     host.isEmpty() ? Ui.tr("Not set") : host,
                     Prefs.aioUser().isEmpty() ? Ui.tr("Not set") : Prefs.aioUser(),
                     Prefs.aioPasswordSet() ? "••••" : Ui.tr("Not set"),
@@ -1659,7 +1668,26 @@ public class SettingsActivity extends Activity {
         }
 
         private void activateAio() {
-            switch (focus) {
+            if (aioBusy) return;
+            if (focus == 0) { openKeyScreen(true); return; }
+            if (Prefs.aioPaired()) {
+                if (focus == 1) searchAio();
+                else if (focus == 2) testAio();
+                else {
+                    aioBusy = true;
+                    new Thread(() -> {
+                        String why = Aio.unpair();
+                        handler.post(() -> {
+                            aioBusy = false;
+                            aioStatus = why == null ? Ui.tr("Disconnected") : why;
+                            focus = 0;
+                            invalidate();
+                        });
+                    }, "aio-unpair").start();
+                }
+                return;
+            }
+            switch (focus - 1) {
                 case 0: editAio(0); break;
                 case 1: editAio(1); break;
                 case 2: editAio(2); break;
@@ -1804,11 +1832,16 @@ public class SettingsActivity extends Activity {
         private static final int K_NEW = 0, K_TYPE = 1, K_REMOVE = 2;
         private static final float QR_SIDE = 300;
 
-        private static String keyLabel(int id) {
-            return id == K_NEW ? Ui.tr("New code") : id == K_TYPE ? Ui.tr("Type it with the remote") : Ui.tr("Remove the key");
+        private String keyLabel(int id) {
+            return id == K_NEW ? Ui.tr("New code") : id == K_TYPE ? (pairingAio ? Ui.tr("AIO pairing link") : Ui.tr("Type it with the remote")) : Ui.tr("Remove the key");
         }
 
         private void openKeyScreen() {
+            openKeyScreen(false);
+        }
+
+        private void openKeyScreen(boolean aio) {
+            pairingAio = aio;
             screen = TMDB_KEY;
             pickScroll = 0;
             focus = 0;
@@ -1818,9 +1851,11 @@ public class SettingsActivity extends Activity {
             String steps = Ui.tr("Free, and it takes two minutes:") + "\n1. " + Ui.tr("Create an account at themoviedb.org.")
                     + "\n2. " + Ui.tr("Open Settings → API and request a developer key.")
                     + "\n3. " + Ui.tr("Scan this code with your phone and paste the API Read Access Token (or the API Key) there.");
+            if (aio) steps = Ui.tr("Scan this code with your phone. In AIO, open Settings → Account → TV connections. Create a pairing link and paste it on the phone page.");
             int width = Math.round((LIST_R - LIST_X - 60 - QR_SIDE - 40) * k);
             keySteps = StaticLayout.Builder.obtain(steps, 0, steps.length(), notice, width).setLineSpacing(6 * k, 1).build();
             String purpose = Ui.tr("The key brings the picks: what's trending on your streaming apps, with their photos on the screensaver.");
+            if (aio) purpose = Ui.tr("Connect your TV to AIO without entering passwords or Jellyfin API keys.");
             keyPurpose = StaticLayout.Builder.obtain(purpose, 0, purpose.length(), notice, Math.round((LIST_R - LIST_X - 60) * k))
                     .setMaxLines(3).setEllipsize(TextUtils.TruncateAt.END).build();
             keyHelp = purpose + " " + steps.replace('\n', ' ');
@@ -1829,7 +1864,8 @@ public class SettingsActivity extends Activity {
 
         private void closeKeyScreen() {
             stopKeyPage();
-            showSettingsRow(keyRow());
+            if (pairingAio) { screen = AIO; focus = pickScroll = 0; }
+            else showSettingsRow(keyRow());
         }
 
         /**
@@ -1851,7 +1887,7 @@ public class SettingsActivity extends Activity {
                 setKeyStatus(Ui.tr("The TV isn't on a network: connect it, or type the key."), true);
             } else {
                 try {
-                    keyPage = new KeyPage(lan, keyListener);
+                    keyPage = new KeyPage(lan, pairingAio ? pairingListener() : keyListener, pairingAio);
                     keyQr = qrBitmap(Qr.encode(keyPage.url));
                     // While the code waits (5 minutes at most), the TV's screensaver doesn't cover it.
                     activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -1865,10 +1901,53 @@ public class SettingsActivity extends Activity {
         }
 
         void stopKeyPage() {
+            synchronized (pairingLock) { pairingGeneration++; }
+            if (pairingAio) keyChecking = false;
             if (keyPage != null) keyPage.close();
             keyPage = null;
             keyQr = null;
             activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+
+        private KeyPage.Listener pairingListener() {
+            final int generation = pairingGeneration;
+            return new KeyPage.Listener() {
+                @Override public void checking() {
+                    handler.post(() -> { keyChecking = true; setKeyStatus(Ui.tr("Checking…"), false); keyRowsChanged(); });
+                }
+                @Override public String accept(String pasted) {
+                    String why = null;
+                    try {
+                        String name = Settings.Global.getString(getContext().getContentResolver(), "device_name");
+                        if (name == null || name.trim().isEmpty()) name = android.os.Build.MODEL;
+                        AioPairing.Connection connection = AioPairing.claim(pasted, name.length() > 80 ? name.substring(0, 80) : name);
+                        synchronized (pairingLock) {
+                            if (generation != pairingGeneration) return Ui.tr("This code has expired.");
+                            if (!Prefs.setAioPairing(connection)) throw new IOException("Could not save the AIO connection");
+                        }
+                    } catch (Exception e) { why = e.getMessage() == null ? Ui.tr("The request was refused.") : e.getMessage(); }
+                    final String error = why;
+                    handler.post(() -> {
+                        keyChecking = false;
+                        if (generation != pairingGeneration) return;
+                        if (error == null) {
+                            stopKeyPage();
+                            setKeyStatus(Ui.tr("Connected to AIO. You can return to AIO Media."), false);
+                            Recs.get(getContext()).refreshIfStale();
+                        } else setKeyStatus(error, true);
+                        keyRowsChanged();
+                    });
+                    return why;
+                }
+                @Override public void closed(KeyPage page, boolean expired) {
+                    handler.post(() -> {
+                        if (page != keyPage) return;
+                        stopKeyPage();
+                        if (expired) setKeyStatus(Ui.tr("This code has expired."), false);
+                        keyRowsChanged();
+                    });
+                }
+            };
         }
 
         /** The QR code's modules as a bitmap, one pixel each, with the light margin readers need (4 modules). */
@@ -1931,7 +2010,7 @@ public class SettingsActivity extends Activity {
             int n = 0;
             if (keyPage == null && !keyChecking) ids[n++] = K_NEW;
             ids[n++] = K_TYPE;
-            if (!Prefs.tmdbKey().isEmpty()) ids[n++] = K_REMOVE;
+            if (!pairingAio && !Prefs.tmdbKey().isEmpty()) ids[n++] = K_REMOVE;
             boolean added = n > 0 && ids[0] == K_NEW && (keyRowIds.length == 0 || keyRowIds[0] != K_NEW);
             keyRowIds = java.util.Arrays.copyOf(ids, n);
             if (screen != TMDB_KEY) return;
@@ -1962,6 +2041,18 @@ public class SettingsActivity extends Activity {
         /** The fallback: the key typed with the remote (the on-screen keyboard), then checked as a phone's would be. */
         private void askKey() {
             if (keyChecking) return;
+            if (pairingAio) {
+                EditText field = new EditText(activity);
+                field.setSingleLine(true);
+                new AlertDialog.Builder(activity).setTitle(Ui.tr("AIO pairing link")).setView(field)
+                        .setPositiveButton(Ui.tr("Save"), (d, w) -> {
+                            String pasted = field.getText().toString();
+                            KeyPage.Listener listener = pairingListener();
+                            listener.checking();
+                            new Thread(() -> listener.accept(pasted), "aio-pair").start();
+                        }).setNegativeButton(Ui.tr("Cancel"), null).show();
+                return;
+            }
             EditText field = new EditText(activity);
             field.setSingleLine(true);
             field.setHint(Ui.tr("API Read Access Token or API Key"));
@@ -2008,7 +2099,7 @@ public class SettingsActivity extends Activity {
         /** The rows, the code with the steps beside it, the address under it for a phone without a camera, and the status. */
         private void drawKey(Canvas c) {
             float x = LIST_X * k + 30 * k, pitch = LIST_ROW_H + LIST_ROW_GAP;
-            c.drawText(Ui.tr("TMDB key"), x, (LIST_TOP - 24) * k, keyHeading);
+            c.drawText(pairingAio ? Ui.tr("Connect with AIO") : Ui.tr("TMDB key"), x, (LIST_TOP - 24) * k, keyHeading);
             int rows = rowCount();
             for (int i = 0; i < rows; i++) {
                 float y = (LIST_TOP + 20 + i * pitch) * k;

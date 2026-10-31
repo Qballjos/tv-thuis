@@ -120,6 +120,17 @@ Er is ook een wekelijkse check. De LG (webOS) krijgt deze APK niet.
 
 Home Settings → **AIO Media**:
 
+Met een AIO-versie die tv-koppelingen ondersteunt, hoef je onderstaande velden niet handmatig in te vullen:
+
+1. Kies **Koppelen met AIO** en scan de QR-code met een telefoon op hetzelfde netwerk.
+2. Open je AIO-dashboard op de telefoon: **Instellingen → Account → Tv-koppelingen → Koppellink maken**.
+3. Kopieer die link en plak hem op de telefoonpagina van de tv. Het AIO-adres komt automatisch mee.
+
+De link werkt één keer, gedurende vijf minuten. De tv bewaart alleen een eigen, intrekbare AIO-koppeling.
+Jellyfin-adres, Jellyfin API-sleutel en AIO-beheerderswachtwoord blijven op de server; ook Verder kijken gaat via AIO.
+Na het koppelen verdwijnen de handmatige invoervelden. Met **AIO ontkoppelen** of in het AIO-dashboard kun je
+één tv intrekken. Andere tv's blijven verbonden. Oudere AIO-versies ondersteunen nog de handmatige velden:
+
 | Veld | Voorbeeld |
 | --- | --- |
 | AIO-server | het https-adres van jullie manager (of http op het thuisnetwerk) |

@@ -91,6 +91,11 @@ public final class PhotoCollageTest {
         save(collage, new File(folder, "collage-720p.jpg"));
         collage.recycle();
         cacheSelections(folder);
+        File pairingLink = new File(folder, "aio-pairing-link");
+        if (pairingLink.isFile()) {
+            try { aioPairing(new String(java.nio.file.Files.readAllBytes(pairingLink.toPath()), java.nio.charset.StandardCharsets.UTF_8)); }
+            finally { pairingLink.delete(); }
+        }
         System.out.println("Photo collage: portrait, landscape, square, EXIF rotation, date, GPS removal and 1/2/3-photo drawing passed.");
         System.exit(0);   // Android's preferences worker otherwise keeps app_process alive
     }
@@ -165,5 +170,21 @@ public final class PhotoCollageTest {
 
     private static void save(Bitmap b, File f) throws Exception {
         try (FileOutputStream out = new FileOutputStream(f)) { b.compress(Bitmap.CompressFormat.JPEG, 92, out); }
+    }
+
+    private static void aioPairing(String link) throws Exception {
+        AioPairing.Connection connection = AioPairing.claim(link, "Disposable test TV");
+        check(Prefs.setAioPairing(connection), "save device connection atomically");
+        check(Prefs.aioPaired() && Prefs.aioUser().isEmpty() && Prefs.aioPassword().isEmpty()
+                && Prefs.jellyfinUrl().isEmpty() && Prefs.jellyfinKey().isEmpty(), "paired TV has no administrator/Jellyfin credentials");
+        String result = Aio.test();
+        check(result.equals(Ui.trf("Signed in. {trending} trending, {recent} recently added.", "trending", "0", "recent", "0")), "connection test uses paired authorization");
+        check(Prefs.aioToken().equals(connection.token), "connection test retains paired token instead of trying a password login");
+        java.util.List<Recs.Pick> resumed = new java.util.ArrayList<>();
+        Aio.resume(resumed);
+        check(resumed.size() == 1 && resumed.get(0).resume && resumed.get(0).title.equals("Pairing test movie"), "Continue Watching arrives through AIO without a Jellyfin key");
+        try { AioPairing.claim(link, "Replay"); throw new AssertionError("pairing link reused"); } catch (java.io.IOException expected) {}
+        check(Aio.unpair() == null && !Prefs.aioPaired(), "TV disconnect revokes its device and removes local credentials");
+        System.out.println("AIO device flow: real claim, private preferences, connection test, Continue Watching, replay rejection and revocation passed.");
     }
 }

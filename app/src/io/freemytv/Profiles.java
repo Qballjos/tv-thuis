@@ -128,7 +128,7 @@ final class Profiles {
     /** Device credentials, permissions and timers keep using the original settings file. */
     static boolean shared(String key) {
         return key.equals("tmdbKey") || key.equals("nowPlaying") || key.startsWith("sleep") || key.startsWith("key")
-                || key.equals("aioUrl") || key.equals("aioUser") || key.equals("aioPassword") || key.equals("aioToken")
+                || key.equals("aioUrl") || key.equals("aioUser") || key.equals("aioPassword") || key.equals("aioToken") || key.equals("aioDeviceId")
                 || key.equals("jellyfinUrl") || key.equals("jellyfinKey");
     }
 
