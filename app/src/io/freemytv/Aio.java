@@ -44,7 +44,7 @@ final class Aio {
 
     /** What changed the list: the address and the account, so a new login fetches again. */
     static String identity() {
-        return Prefs.aioUrl() + "\n" + Prefs.aioUser() + "\n" + (Prefs.aioToken().isEmpty() ? "0" : "1")
+        return Prefs.aioUrl() + "\n" + Prefs.aioUser() + "\n" + Prefs.aioToken()
                 + "\n" + Prefs.jellyfinUrl() + "\n" + Integer.toHexString(Prefs.jellyfinKey().hashCode());
     }
 
@@ -132,6 +132,17 @@ final class Aio {
             readCards(items, recent, true);
         }
         if (trending.isEmpty() && recent.isEmpty()) throw new IOException(Ui.tr("The media manager returned no titles."));
+    }
+
+    /** A page of the owned library; older AIO servers ignore the type filter, so the caller also filters it. */
+    static boolean fillLibrary(String kind, int page, List<Recs.Pick> into) throws IOException {
+        if (!("movie".equals(kind) || "tv".equals(kind))) throw new IOException("Invalid library type");
+        ensureToken();
+        JSONObject result = get("/api/homepage/recent?mediaType=" + kind + "&page=" + page);
+        JSONArray rows = array(result, "items");
+        if (rows.length() == 0 && !result.optString("error").isEmpty()) throw new IOException(result.optString("error"));
+        readCards(rows, into, true);
+        return rows.length() >= 20 && page < 500;
     }
 
     /** Seerr search. Empty when the query is too short. */

@@ -38,10 +38,16 @@ In **Startscherm → Bovenaan het scherm** kies je wat de kaarten tonen:
 | --- | --- |
 | Verder kijken | In progress / next-up uit Jellyfin |
 | Pas toegevoegd | Films en series die net in Jellyfin of Plex zijn gekomen |
-| Films | Trending films van deze week (via de manager / Seerr) |
-| Series | Trending series van deze week |
+| Films | Je eigen filmbibliotheek; volgende pagina’s laden tijdens het bladeren |
+| Series | Je eigen series; volgende pagina’s laden tijdens het bladeren |
+| Trending | Aanbevelingen van deze week (via Seerr), met aanvragen voor ontbrekende titels |
 
 OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr. OK op een titel die er al is, opent Wholphin. Plaatjes voor Verder kijken en Pas toegevoegd gaan via de AIO-manager (https), niet rechtstreeks over http naar Jellyfin.
+
+**Verder kijken** bevat alleen begonnen films en volgende afleveringen; dit is niet je hele bibliotheek.
+Films en Series laden per 20 titels door en gebruiken geen limiet van 25–40 aanbevelingen. Alleen afbeeldingen rond
+de geselecteerde tegel worden voorbereid. De AIO-nightly met de verbeterde afbeeldingsroute levert brede achtergronden
+van 1280 × 720 en posters van 780 × 1170, in plaats van een uitvergrote miniatuurposter.
 
 De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
 
@@ -64,7 +70,7 @@ De nieuwe profielbediening is vertaald in Nederlands en Engels; de andere talen 
 
 ## Schermbeveiliging
 
-De schermbeveiliging toont posters (of bij AIO afwisselend trendingtitels en nieuw toegevoegde films en series) op een zwarte achtergrond, met klok en weer. Dubbele titels verschijnen één keer; de nieuw toegevoegde versie krijgt voorrang. Op Android staat daarbij **Trending** of **Nieuw toegevoegd**. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
+De schermbeveiliging toont posters (of bij AIO de trendingfoto’s) op een zwarte achtergrond, met klok en weer. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
 
 In **Startscherm → Schermbeveiliging**:
 

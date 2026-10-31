@@ -408,6 +408,7 @@ var Data = (function () {
   var cache = stored('recs') || {};
   var picks = cache.picks || [], listAt = cache.listAt || 0, period = cache.period, listLang = cache.lang || '', stamp = cache.stamp || '';
   var fetchingRecs = false, failedAt = 0, recsError = '';
+  var libraries = {}, libraryStamp = '';
 
   function saveRecs() { store('recs', {picks: picks, listAt: listAt, period: period, lang: listLang, stamp: stamp}); }
 
@@ -441,7 +442,55 @@ var Data = (function () {
   function topAio() { return aioOn() && Prefs.topContent() === 'aio'; }
 
   function now(kind) {
+    if (topAio() && (kind === 'movie' || kind === 'tv')) return libraryRows(kind);
     return topAio() ? aioRows(kind) : tipRows(kind);
+  }
+
+  function libraryIdentity() { return aioBase() + ':' + Prefs.aioUser() + ':' + Prefs.aioToken(); }
+
+  function libraryItems(previous, next, kind) {
+    var out = [], seen = {}, list = previous.concat(next);
+    for (var i = 0; i < list.length; i++) {
+      var p = list[i], id = 'id:' + keyOf(p);
+      if (p.aio && p.recent && !p.resume && p.kind === kind && !seen[id]) { seen[id] = true; out.push(p); }
+    }
+    return out;
+  }
+
+  function libraryState(kind) {
+    var identity = libraryIdentity();
+    if (identity !== libraryStamp) { libraries = {}; libraryStamp = identity; }
+    if (!libraries[kind]) libraries[kind] = {items: [], page: 0, loading: false, end: false, failedAt: 0};
+    return libraries[kind];
+  }
+
+  function libraryRows(kind) {
+    var state = libraryState(kind);
+    if (!state.page) moreLibrary(kind);
+    return state.items;
+  }
+
+  function moreLibrary(kind) {
+    if (!aioOn() || (kind !== 'movie' && kind !== 'tv')) return;
+    var state = libraryState(kind), identity = libraryStamp, sinceFail = Date.now() - state.failedAt;
+    if (state.loading || state.end || (state.failedAt && sinceFail >= 0 && sinceFail < 30000)) return;
+    state.loading = true;
+    ensureAio(function (error) {
+      if (error) { finish(error); return; }
+      aioCall('GET', '/api/homepage/recent?mediaType=' + kind + '&page=' + (state.page + 1), null, finish);
+    });
+    function finish(error, data) {
+      state.loading = false;
+      if (libraries[kind] !== state || identity !== libraryIdentity()) { changed(); return; }
+      var rows = data && data.items || [], next = [];
+      if (error || (data && data.error && !rows.length)) { state.failedAt = Date.now(); changed(); return; }
+      for (var i = 0; i < rows.length; i++) if (rows[i].title) next.push(aioPick(rows[i], true));
+      state.items = libraryItems(state.page ? state.items : [], next, kind);
+      state.page++;
+      state.end = rows.length < 20 || state.page >= 500;
+      state.failedAt = 0;
+      changed();
+    }
   }
 
   function aioRows(kind) {
@@ -451,7 +500,7 @@ var Data = (function () {
       if (!item.aio) continue;
       if (kind === 'resume') { if (item.resume) list.push(item); }
       else if (kind === 'recent' || kind === null) { if (item.recent && !item.resume) list.push(item); }
-      else if (!item.recent && !item.resume && item.kind === kind) list.push(item);
+      else if (!item.recent && !item.resume && (kind === 'trending' || item.kind === kind)) list.push(item);
     }
     if (kind === 'resume') return list.slice(0, Prefs.cards());
     return sliceHour(list);
@@ -869,6 +918,7 @@ var Data = (function () {
             if (rows) for (var r = 0; r < rows.length; r++) list.push(rows[r]);
             if (!list.length) { done(new Error(trSafe('The media manager returned no titles.'))); return; }
             picks = list;
+            libraries = {};
             done(null);
           });
         }
@@ -1030,21 +1080,13 @@ var Data = (function () {
     keyChanged: function () { KEY = Prefs.tmdbKey(); recsError = ''; failedAt = 0; refreshRecs(); changed(); },
     recsError: function () { return recsError; },
     picks: now,
+    moreLibrary: moreLibrary,
     showcase: function () {
       if (!aioOn()) return all();
-      var out = [], trending = [], recent = [], seen = {}, i, p, id;
-      for (i = 0; i < picks.length; i++) {
-        p = picks[i];
-        if (!p.aio || p.resume || !p.backdrop) continue;
-        id = (p.recent ? 'r:' : 't:') + franchise(p.title);
-        if (seen[id]) continue;
-        seen[id] = true;
-        (p.recent ? recent : trending).push(p);
-      }
-      trending = trending.filter(function (p) { return !seen['r:' + franchise(p.title)]; });
-      for (i = 0; i < Math.max(trending.length, recent.length); i++) {
-        if (i < trending.length) out.push(trending[i]);
-        if (i < recent.length) out.push(recent[i]);
+      var out = [], seen = {};
+      for (var i = 0; i < picks.length; i++) {
+        var p = picks[i];
+        if (p.aio && !p.recent && !p.resume && p.backdrop && !seen[p.kind + ':' + p.id]) { seen[p.kind + ':' + p.id] = true; out.push(p); }
       }
       return out;
     },
@@ -1067,8 +1109,9 @@ var Data = (function () {
         jfHeaders(x);
       } else if (Prefs.aioToken()) x.setRequestHeader('Authorization', 'Bearer ' + Prefs.aioToken());
       x.onload = function () {
-        if (x.status === 200 && x.response) done(URL.createObjectURL(x.response));
+        done(x.status === 200 && x.response ? URL.createObjectURL(x.response) : '');
       };
+      x.onerror = x.ontimeout = function () { done(''); };
       x.send();
     },
     requestTitle: function (kind, id, done) {

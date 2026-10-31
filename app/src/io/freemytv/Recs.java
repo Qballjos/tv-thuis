@@ -210,6 +210,15 @@ final class Recs {
     private volatile String listLanguage = "";   // language used for the saved titles, genres and texts
     private volatile String traktActivity = "";  // Trakt's last change when the picks were fetched
     private volatile long traktCheckedAt;
+    private final Map<String, Library> libraries = new HashMap<>();
+    private String libraryIdentity = "";
+
+    private static final class Library {
+        List<Pick> items = new ArrayList<>();
+        int page;
+        boolean loading, end;
+        long failedAt;
+    }
 
     private Recs(Context c) {
         context = c;
@@ -332,10 +341,84 @@ final class Recs {
         return now(null);
     }
 
-    /** This hour's Prefs.cards(), movies only ("movie") or shows only ("tv"); null = both (the home screen tabs). */
+    /** Selected home tab: hourly recommendations, or paged owned movies/shows in AIO mode. */
     List<Pick> now(String kind) {
-        if (Aio.configured() && Prefs.TOP_AIO.equals(Prefs.topContent())) return aioNow(kind);
+        if (Aio.configured() && Prefs.TOP_AIO.equals(Prefs.topContent())) {
+            if ("movie".equals(kind) || "tv".equals(kind)) return libraryNow(kind);
+            return aioNow(kind);
+        }
         return tipsNow(kind);
+    }
+
+    /** Called only under the libraries lock. Credentials changing cannot expose the previous server's pages. */
+    private Library library(String kind) {
+        String identity = Aio.identity();
+        if (!identity.equals(libraryIdentity)) {
+            libraries.clear();
+            libraryIdentity = identity;
+        }
+        Library state = libraries.get(kind);
+        if (state == null) {
+            state = new Library();
+            libraries.put(kind, state);
+        }
+        return state;
+    }
+
+    private List<Pick> libraryNow(String kind) {
+        List<Pick> items;
+        boolean first;
+        synchronized (libraries) {
+            Library state = library(kind);
+            items = state.items;
+            first = state.page == 0;
+        }
+        if (first) moreLibrary(kind);
+        return items;
+    }
+
+    /** Fetch another page near the focused card, never the entire library's artwork at once. */
+    void moreLibrary(String kind) {
+        if (!Aio.configured() || !("movie".equals(kind) || "tv".equals(kind))) return;
+        final Library state;
+        final String identity;
+        final int page;
+        synchronized (libraries) {
+            state = library(kind);
+            long sinceFail = System.currentTimeMillis() - state.failedAt;
+            if (state.loading || state.end || (state.failedAt != 0 && sinceFail >= 0 && sinceFail < 30_000)) return;
+            state.loading = true;
+            page = state.page + 1;
+            identity = libraryIdentity;
+        }
+        io.execute(() -> {
+            try {
+                List<Pick> next = new ArrayList<>();
+                boolean more = Aio.fillLibrary(kind, page, next);
+                synchronized (libraries) {
+                    if (libraries.get(kind) != state || !identity.equals(Aio.identity())) return;
+                    state.items = libraryItems(page == 1 ? new ArrayList<>() : state.items, next, kind);
+                    state.page = page;
+                    state.end = !more;
+                    state.failedAt = 0;
+                }
+            } catch (IOException e) {
+                synchronized (libraries) { state.failedAt = System.currentTimeMillis(); }
+                AppLog.w("library: " + e.getMessage());
+            } finally {
+                synchronized (libraries) { state.loading = false; }
+                notifyListeners();
+            }
+        });
+    }
+
+    /** Owned movies/shows keep their order and individual IDs, including sequels in the same franchise. */
+    static List<Pick> libraryItems(List<Pick> previous, List<Pick> next, String kind) {
+        Map<String, Pick> unique = new LinkedHashMap<>();
+        for (List<Pick> page : Arrays.asList(previous, next)) {
+            for (Pick p : page) if (p.aio && p.recent && !p.resume && kind.equals(p.kind)) unique.putIfAbsent(key(p), p);
+        }
+        return new ArrayList<>(unique.values());
     }
 
     /** Tips: TMDB (and Trakt), never the media manager's titles. */
@@ -391,7 +474,7 @@ final class Recs {
             if (!p.aio) continue;
             if (resume) { if (p.resume) list.add(p); }
             else if ("recent".equals(kind) || kind == null) { if (p.recent && !p.resume) list.add(p); }
-            else if (!p.recent && !p.resume && kind.equals(p.kind)) list.add(p);
+            else if (!p.recent && !p.resume && ("trending".equals(kind) || kind.equals(p.kind))) list.add(p);
         }
         int cards = Prefs.cards();
         if (resume) return list.size() > cards ? new ArrayList<>(list.subList(0, cards)) : list;
@@ -537,9 +620,11 @@ final class Recs {
     List<Pick> showcase() {
         List<Pick> out = new ArrayList<>();
         if (Aio.configured()) {
-            List<Pick> ready = new ArrayList<>();
-            for (Pick p : picks) if (p.aio && hasImage(p)) ready.add(p);
-            return aioShowcase(ready);
+            java.util.Set<String> seen = new java.util.HashSet<>();
+            for (Pick p : picks) {
+                if (p.aio && !p.recent && !p.resume && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
+            }
+            return out;
         }
         if (!hasKey(context)) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -549,23 +634,6 @@ final class Recs {
             if (p.detailed && p.pkg != null && have.computeIfAbsent(p.pkg, this::installed) && hasImage(p)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))
                     && seen.add(franchise(p.title))) out.add(p);
-        }
-        return out;
-    }
-
-    /** Alternate ready AIO trending/library art; a newly added copy wins over the same trending franchise. */
-    static List<Pick> aioShowcase(List<Pick> ready) {
-        Map<String, Pick> trending = new LinkedHashMap<>(), recent = new LinkedHashMap<>();
-        for (Pick p : ready) {
-            if (!p.aio || p.resume) continue;
-            (p.recent ? recent : trending).putIfAbsent(franchise(p.title), p);
-        }
-        for (String title : recent.keySet()) trending.remove(title);
-        java.util.Iterator<Pick> t = trending.values().iterator(), r = recent.values().iterator();
-        List<Pick> out = new ArrayList<>();
-        while (t.hasNext() || r.hasNext()) {
-            if (t.hasNext()) out.add(t.next());
-            if (r.hasNext()) out.add(r.next());
         }
         return out;
     }
@@ -677,6 +745,7 @@ final class Recs {
         list.addAll(aio);
         list.addAll(tips);
         picks = list;
+        synchronized (libraries) { libraries.clear(); }
         period = p;
         listAt = System.currentTimeMillis();
         listLanguage = Ui.language;
