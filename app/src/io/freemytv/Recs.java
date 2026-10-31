@@ -1027,7 +1027,7 @@ final class Recs {
         List<String[]> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (String[] s : SERVICES) {
-            if (HomeApps.launchIntent(c.getPackageManager(), s[2]) != null && seen.add(s[1])) out.add(new String[] {s[1], SERVICE_NAME.get(s[1])});
+            if (Prefs.appVisible(s[2]) && HomeApps.launchIntent(c.getPackageManager(), s[2]) != null && seen.add(s[1])) out.add(new String[] {s[1], SERVICE_NAME.get(s[1])});
         }
         return out;
     }
@@ -1037,6 +1037,7 @@ final class Recs {
      * hide_services line of config.properties is where those switches start: an app the TV ships without a subscription).
      */
     private boolean installed(String pkg) {
+        if (!Prefs.appVisible(pkg)) return false;
         for (String[] s : SERVICES) if (s[2].equals(pkg) && Prefs.serviceOff(s[1])) return false;
         return HomeApps.launchIntent(context.getPackageManager(), pkg) != null;
     }

@@ -61,7 +61,7 @@ final class HomeApps {
     /** The Recent Apps switcher (the home screen opens it). */
     static final int RECENTS = 8;
     /** A Home Assistant entity in the drawer (HomeAssistant): OK calls its service, nothing opens. */
-    static final int HOME_ASSISTANT = 9;
+    static final int HOME_ASSISTANT = 9, PROFILES = 10;
     /** Image size of each card (16:9; on screen it shows up to ~330 px wide). */
     static final int TILE_W = 384, TILE_H = 216;
 
@@ -209,6 +209,7 @@ final class HomeApps {
         int max = maxShelf(c);
         for (String pkg : shelfPackages(c)) {
             if (items.size() >= max) break;
+            if (!Prefs.appVisible(pkg)) continue;
             Intent launch = launchIntent(pm, pkg);
             if (launch == null) continue;
             ResolveInfo ri = pm.resolveActivity(launch, 0);
@@ -260,6 +261,10 @@ final class HomeApps {
 
     /** Every app the shelf could hold, as {package, name}: the ones from SHELF first, then the other TV apps by name. */
     static List<String[]> shelfCandidates(Context c) {
+        return shelfCandidates(c, false);
+    }
+
+    static List<String[]> shelfCandidates(Context c, boolean includeHidden) {
         PackageManager pm = c.getPackageManager();
         List<String[]> out = new ArrayList<>();
         Set<String> seen = new HashSet<>();
@@ -279,6 +284,7 @@ final class HomeApps {
         }
         Collections.sort(more, (a, b) -> a[1].toLowerCase(Locale.ROOT).compareTo(b[1].toLowerCase(Locale.ROOT)));
         out.addAll(more);
+        if (!includeHidden) out.removeIf(app -> !Prefs.appVisible(app[0]));
         return out;
     }
 
@@ -288,7 +294,7 @@ final class HomeApps {
     static final List<String> TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS));
     /** What can be a top button: the default three, and Recent Apps for whoever adds it. */
     static final List<String> TOP_ALL = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS, TOP_RECENTS));
-    static final int MAX_TOP = TOP_ALL.size();
+    static final int MAX_TOP = TOP_ALL.size() + 1;   // the profile button is always available
 
     /** The keys of the top buttons, in order (Settings > Top Buttons; by default Live TV, HDMI Inputs, Settings). */
     static List<String> topButtonKeys() {
@@ -302,10 +308,11 @@ final class HomeApps {
         return keys;
     }
 
-    /** The top buttons, ready to draw (0 to 3 of them). */
+    /** The chosen top buttons, followed by the profile button. */
     static List<Item> topButtons() {
         List<Item> items = new ArrayList<>();
         for (String key : topButtonKeys()) items.add(topButton(key));
+        items.add(action(PROFILES, "profiles", Ui.trf("Profiles: {name}", "name", Prefs.profiles().name()), "person"));
         return items;
     }
 
@@ -593,7 +600,7 @@ final class HomeApps {
         Set<String> seen = new HashSet<>();
         for (String[] app : launchable(c)) {
             String pkg = app[0];
-            if (skip.contains(pkg) || !seen.add(pkg)) continue;
+            if (skip.contains(pkg) || !Prefs.appVisible(pkg) || !seen.add(pkg)) continue;
             Item it = new Item();
             it.kind = APP;
             it.pkg = pkg;
@@ -627,6 +634,7 @@ final class HomeApps {
         Intent intent, plain = null;
         switch (it.kind) {
             case APP:
+                if (!Prefs.appVisible(it.pkg)) return false;
                 intent = launchIntent(a.getPackageManager(), it.pkg);
                 plain = intent;
                 if (plain != null) plain.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
@@ -649,6 +657,10 @@ final class HomeApps {
             case SETTINGS:
                 intent = new Intent().setComponent(new ComponentName(a, SettingsActivity.class));
                 break;
+            case PROFILES:
+                if (!(a instanceof Activity)) return false;
+                ProfileManagerActivity.open((Activity) a);
+                return true;
             case ANDROID_SETTINGS:
                 intent = new Intent(Settings.ACTION_SETTINGS);
                 // Where nothing answers it, Android TV's own settings by name: on the HY300 Pro+ the stock home

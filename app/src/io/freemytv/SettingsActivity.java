@@ -1047,6 +1047,7 @@ public class SettingsActivity extends Activity {
             if (dollar()) l.add(Ui.tr("Dollar"));
             l.add(Ui.tr("AIO Media"));
             l.add(Ui.tr("TMDB key"));
+            l.add(Ui.tr("Profiles"));
             l.add(Ui.tr("Updates"));
             return l.toArray(new String[0]);
         }
@@ -1057,7 +1058,7 @@ public class SettingsActivity extends Activity {
         }
 
         private int keyRow() {
-            return updatesRow() - 1;
+            return updatesRow() - 2;
         }
 
         /** The media-manager row, just above the TMDB key. */
@@ -1155,6 +1156,7 @@ public class SettingsActivity extends Activity {
             String host = Prefs.aioUrl();
             v[aioRow()] = host.isEmpty() ? Ui.tr("Not set") : host.replaceFirst("^https?://", "");
             v[keyRow()] = keyValue();
+            v[updatesRow() - 1] = Prefs.profiles().name();
             v[updatesRow()] = updatesValue();
             return v;
         }
@@ -2626,6 +2628,8 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (screen == HOME_SETTINGS && pickScroll + focus == keyRow()) {
                 openKeyScreen();
+            } else if (screen == HOME_SETTINGS && pickScroll + focus == updatesRow() - 1) {
+                ProfileManagerActivity.open(activity);
             } else if (screen == TMDB_KEY) {
                 activateKey();
                 invalidate();

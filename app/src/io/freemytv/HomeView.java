@@ -424,6 +424,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final Runnable reloadSoon = this::reload;
     private static final long APPS_MAX_AGE_MS = 15 * 60_000;
     private final LauncherApps launcherApps;
+    private final Bitmap profileAvatar;
     private boolean appsStale = true;
     private int appsVersion, appsGeneration;
     private long appsAt;
@@ -614,7 +615,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         playing = new NowPlaying.Watch(a, this::onPlaying);
         click = new Click(a);
         shelfVisible = HomeApps.shelfVisible(a);
-        ui = a.getSharedPreferences("home-ui", Context.MODE_PRIVATE);
+        ui = a.getSharedPreferences(Prefs.profiles().namespace("home-ui"), Context.MODE_PRIVATE);
+        profileAvatar = ProfileAvatars.image(Prefs.profiles().avatar(Prefs.profiles().active()));
         tvInputs = (TvInputManager) a.getSystemService(Context.TV_INPUT_SERVICE);
         connectivity = (ConnectivityManager) a.getSystemService(Context.CONNECTIVITY_SERVICE);
         BluetoothManager bm = (BluetoothManager) a.getSystemService(Context.BLUETOOTH_SERVICE);
@@ -4766,8 +4768,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 fill.setColor(Ui.alpha(0xFFFFFFFF, f));
                 c.drawCircle(cell.centerX(), cell.centerY(), rad, fill);
             }
-            Symbols.draw(getContext(), c, it.symbol, cell.centerX(), cell.centerY(), 27 * k * s,
-                    blend(tone(L_INK, 0xEBFFFFFF), L_INK, f));
+            int ink = blend(tone(L_INK, 0xEBFFFFFF), L_INK, f);
+            if (it.kind == HomeApps.PROFILES) {
+                tmp.set(cell);
+                tmp.inset(5 * k, 5 * k);
+                c.drawBitmap(profileAvatar, null, tmp, imagePaint);
+            } else Symbols.draw(getContext(), c, it.symbol, cell.centerX(), cell.centerY(), 27 * k * s, ink);
             if (f > 0.01f) {
                 String label = it.label;
                 float half = lTip.measureText(label) / 2;

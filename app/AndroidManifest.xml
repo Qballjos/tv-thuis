@@ -137,6 +137,14 @@
             android:screenOrientation="landscape"
             android:theme="@style/FreeMyTV.QuickSettings" />
 
+        <activity
+            android:name=".ProfileManagerActivity"
+            android:process=":home"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:screenOrientation="landscape"
+            android:theme="@style/FreeMyTV.Home" />
+
         <!-- The home screen. Its own process (:home): if it ever crashes, the safety net in the main process still
              works. It only becomes the TV's home screen in Free My TV mode (cmd package set-home-activity). -->
         <activity
