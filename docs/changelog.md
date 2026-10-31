@@ -2,12 +2,13 @@
 
 Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-thuis)) bovenop Free My TV toevoegt of veranderde. De Android-tv’s installeren een nieuwe versie via **Startscherm → Updates**. De LG krijgt die APK niet; daar blijft een aparte webOS-installatie nodig.
 
-## Nog niet uitgebracht
+## 1.3.5
 
-- Zelf profielen aanmaken, hernoemen, wisselen en verwijderen, met 25 ingebouwde profielafbeeldingen, inclusief een regenboog.
-- Per profiel een eigen app-plank, app-zichtbaarheid en startscherminstellingen, naast de bestaande AIO-functies.
-- Verborgen apps blijven ook uit Verder kijken. Bestaande instellingen en profielkeuzes blijven bij updates behouden.
-- AIO-/Jellyfin-aanmeldgegevens en apparaatinstellingen blijven gedeeld en blijven behouden bij het verwijderen van een profiel.
+- **Profielen** op Android / Google TV: aanmaken, hernoemen, wisselen en verwijderen, met 25 ingebouwde afbeeldingen (inclusief een regenboog).
+- Per profiel een eigen app-plank, app-zichtbaarheid en startscherminstellingen (inclusief Tips / Verder kijken / Klok / AIO).
+- Verborgen apps blijven ook uit Verder kijken. Bestaande instellingen en de actieve profielkeuze blijven bij updates behouden.
+- AIO-/Jellyfin-aanmeldgegevens en apparaatinstellingen blijven gedeeld; ze blijven ook staan als je een profiel verwijdert.
+- Dit zijn startschermprofielen, geen ouderlijk toezicht: streaming-accounts en kijkgeschiedenis blijven gedeeld.
 
 ## 1.3.4
 
