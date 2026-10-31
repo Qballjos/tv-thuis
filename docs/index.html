@@ -261,7 +261,7 @@
           <ol class="howto">
             <li><b>On the TV:</b> Settings → System → About → press <em>Android TV OS build</em> 7 times. Back in System, open <em>Developer options</em> and turn on <em>USB debugging</em>. Write down the TV's IP address (Settings → Network &amp; Internet).</li>
             <li><b>On your computer:</b> open an AI assistant (Claude Code, Codex or Antigravity) and say:
-              <div class="code prompt"><code>Install Free My TV (github.com/simbasjungles/free-my-tv) on my TV at 192.168.1.50. I live in Lisbon.</code><button class="copy-btn" type="button" aria-label="Copy prompt">Copy</button></div>
+              <div class="code prompt"><code>Install Free My TV (github.com/simbasjungles/free-my-tv) on my TV at &lt;TV-IP&gt;. I live in &lt;your city&gt;.</code><button class="copy-btn" type="button" aria-label="Copy prompt">Copy</button></div>
               It downloads the code, installs the tools it needs, builds the app and puts it on your TV, and asks before anything important. Swap in your TV's IP and your city.
             </li>
             <li><b>Back on the TV:</b> open <em>Free My TV</em> → <em>Home Screen</em> → <em>Free My TV</em>. That's when the TV asks <em>Allow USB debugging?</em> for Free My TV: tick <em>Always allow</em> and accept.</li>
@@ -272,7 +272,7 @@
           <ol class="howto">
             <li><b>On the TV:</b> turn on <em>Developer options</em> and <em>USB debugging</em> (as in the first tab), and note its IP address.</li>
             <li><b>On your computer:</b> download <em>FreeMyTV.apk</em> from the <a href="https://github.com/simbasjungles/free-my-tv/releases/latest" rel="noopener">latest release</a> and install it with adb (on a Mac, <em>brew install android-platform-tools</em>):
-              <div class="code"><code>adb connect 192.168.1.50:5555 &amp;&amp; adb install -r FreeMyTV.apk</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
+              <div class="code"><code>adb connect &lt;TV-IP&gt;:5555 &amp;&amp; adb install -r FreeMyTV.apk</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
               On Android 14, if Play Protect holds it, choose <em>More details</em> → <em>Install anyway</em>. On TCL TVs, also let it run in the background (TCL blocks it by default):
               <div class="code"><code>adb shell &quot;appops set io.freemytv AUTO_START allow || appops set io.freemytv APP_AUTO_START allow&quot;</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
             </li>
@@ -291,7 +291,7 @@
               <div class="code"><code>git clone https://github.com/simbasjungles/free-my-tv &amp;&amp; cd free-my-tv &amp;&amp; ./build.sh</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
             </li>
             <li><b>Install:</b>
-              <div class="code"><code>adb connect 192.168.1.50:5555 &amp;&amp; adb install -r FreeMyTV.apk</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
+              <div class="code"><code>adb connect &lt;TV-IP&gt;:5555 &amp;&amp; adb install -r FreeMyTV.apk</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
               On TCL TVs, also let it run in the background (TCL blocks it by default):
               <div class="code"><code>adb shell &quot;appops set io.freemytv AUTO_START allow || appops set io.freemytv APP_AUTO_START allow&quot;</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
             </li>
@@ -309,7 +309,7 @@
               <div class="code"><code>git clone https://github.com/simbasjungles/free-my-tv &amp;&amp; cd free-my-tv &amp;&amp; python3 webos/build.py</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
             </li>
             <li><b>Install your build:</b> type the TV's passphrase when it asks. Free My TV opens on the TV.
-              <div class="code"><code>python3 webos/install.py 192.168.1.50</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
+              <div class="code"><code>python3 webos/install.py &lt;TV-IP&gt;</code><button class="copy-btn" type="button" aria-label="Copy command">Copy</button></div>
             </li>
             <li><b>One press away:</b> while it's open, hold a number key on the remote. From then on, that key opens Free My TV from anywhere. Press <em>EXTEND</em> in Developer Mode once a month to keep it.</li>
           </ol>
@@ -324,7 +324,7 @@
             </li>
             <li><b>Straight to it:</b> in the TV's settings, under <em>Start Screen Options</em>, turn on <em>Autorun Last App</em>: the TV turns on into Free My TV (on 2019 and 2020 TVs, put it first in the Home bar instead). It takes your city from the TV's time zone (change it in <em>Home Settings</em> → <em>City</em>); for the trending picks, type your free TMDB key in <em>Home Settings</em> → <em>TMDB key</em>.</li>
             <li><b>A 2015 or 2016 TV?</b> TizenBrew starts at 2017, so let your AI assistant build it for you (Developer mode as in step 1):
-              <div class="code prompt"><code>Install Free My TV (github.com/simbasjungles/free-my-tv) on my Samsung TV at 192.168.1.50. I live in Lisbon.</code><button class="copy-btn" type="button" aria-label="Copy prompt">Copy</button></div>
+              <div class="code prompt"><code>Install Free My TV (github.com/simbasjungles/free-my-tv) on my Samsung TV at &lt;TV-IP&gt;. I live in &lt;your city&gt;.</code><button class="copy-btn" type="button" aria-label="Copy prompt">Copy</button></div>
             </li>
           </ol>
         </div>

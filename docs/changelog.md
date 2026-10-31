@@ -40,14 +40,14 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Toestellen in huis
 
-| Toestel | IP (thuis) | Opmerkingen |
-| --- | --- | --- |
-| TCL 58P635 (2023) | 192.168.2.115 | Android 11, G07. `APP_AUTO_START` na elke nieuwe installatie. TGuard kan de omschakeling even onderbreken. |
-| TCL 65C75B (2024) | 192.168.2.220 | Android 12, G08. Gallery e.d. uit in Free My TV-modus. |
-| Google TV Streamer | 192.168.2.140 | Android 14. Poort 5555 valt na herstart weg tot draadloze foutopsporing + `adb tcpip 5555`. |
-| LG 43UP77006LB | 192.168.2.22 | webOS 6. Alleen de app; LG-home blijft. Nummertoets vasthouden om te pinnen. Geen APK-update. |
+Geen IP-adressen of servernamen in deze repo. De handleidingen per model staan onder [README](../README.md#handleiding-per-toestel).
 
-Handleidingen: [README](../README.md#handleiding-per-toestel).
+| Toestel | Opmerkingen |
+| --- | --- |
+| TCL 58P635 (2023) | Android 11, G07. `APP_AUTO_START` na elke nieuwe installatie. TGuard kan de omschakeling even onderbreken. |
+| TCL 65C75B (2024) | Android 12, G08. Gallery e.d. uit in Free My TV-modus. |
+| Google TV Streamer | Android 14. Poort 5555 valt na herstart weg tot draadloze foutopsporing + `adb tcpip 5555`. |
+| LG 43UP77006LB | webOS 6. Alleen de app; LG-home blijft. Nummertoets vasthouden om te pinnen. Geen APK-update. |
 
 ## Niet gedaan / bewust niet
 

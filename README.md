@@ -59,10 +59,10 @@ Home Settings → **AIO Media**:
 
 | Veld | Voorbeeld |
 | --- | --- |
-| AIO-server | `https://aio.mediavangst.nl` of `http://192.168.1.20:8080` |
+| AIO-server | het https-adres van jullie manager (of http op het thuisnetwerk) |
 | Gebruikersnaam | de beheerder van de manager |
 | Wachtwoord | hetzelfde wachtwoord |
-| Jellyfin-server | `http://192.168.2.82:8096` (voor Verder kijken) |
+| Jellyfin-server | het adres van Jellyfin op het thuisnetwerk (voor Verder kijken) |
 | Jellyfin API-sleutel | uit Jellyfin → Dashboard → API-sleutels |
 | Zoeken en aanvragen | een titel die niet in de trendinglijst staat |
 | Verbinding testen | moet trending- en recent-aantallen tonen |
