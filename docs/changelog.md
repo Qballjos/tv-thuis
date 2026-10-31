@@ -4,6 +4,10 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+- **Koppelen met AIO** via QR en een eenmalige koppellink uit het AIO-dashboard. De tv neemt het serveradres over
+  en bewaart een eigen intrekbaar token; AIO-wachtwoorden en Jellyfin-sleutels hoeven niet meer op de tv.
+- Verder kijken kan via de gekoppelde AIO-server; handmatig instellen blijft beschikbaar voor oudere AIO-versies.
+
 - **Fotocollage** als extra schermbeveiliging op Android / Google TV: maximaal drie eigen foto's met witte lijsten,
   opnamedatums, zachte overgangen en klok en weer rechtsonder.
 - Gebruikt de bestaande Immich-bron (alle foto's of één album), ook naast AIO. Nieuwe imports bewaren de volledige

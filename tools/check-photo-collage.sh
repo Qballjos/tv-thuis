@@ -15,9 +15,12 @@ mkdir "$test_dir/dex"
 "$BT/d8" --lib "$AJ" --classpath out/classes --output "$test_dir/dex" "$test_dir"/io/freemytv/PhotoCollageTest*.class
 (cd "$test_dir/dex" && zip -q "$test_dir/runner.jar" classes.dex)
 remote="/data/local/tmp/tv-thuis-collage-test"
+adb -s "$1" root >/dev/null
 adb -s "$1" install -r FreeMyTV.apk >/dev/null
 adb -s "$1" shell mkdir -p "$remote"
 adb -s "$1" push FreeMyTV.apk "$remote/app.apk" >/dev/null
 adb -s "$1" push "$test_dir/runner.jar" "$remote/runner.jar" >/dev/null
 adb -s "$1" shell "CLASSPATH=$remote/app.apk:$remote/runner.jar app_process /system/bin io.freemytv.PhotoCollageTest $remote"
+app_uid="$(adb -s "$1" shell stat -c '%u:%g' /data/user/0/io.freemytv | tr -d '\r')"
+adb -s "$1" shell chown -R "$app_uid" /data/user/0/io.freemytv/shared_prefs
 echo "Graphics fixtures are in $remote on $1."

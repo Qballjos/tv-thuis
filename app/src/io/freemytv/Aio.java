@@ -18,7 +18,7 @@ import java.util.List;
 
 /**
  * The household media manager (aio-media-server-manager). Home Settings stores the address and
- * the admin login; the app keeps the session token and talks to the Homepage API.
+ * either a paired device token or the legacy admin login, and talks to the Homepage API.
  */
 final class Aio {
     private Aio() {}
@@ -82,7 +82,7 @@ final class Aio {
     /** Signs in and reads Home. A sentence for the settings row; never throws. */
     static String test() {
         try {
-            forgetToken();
+            if (!Prefs.aioPaired()) forgetToken();
             ensureToken();
             JSONObject home = get("/api/homepage");
             int trending = array(home, "trending").length();
@@ -92,6 +92,14 @@ final class Aio {
         } catch (Exception e) {
             return message(e);
         }
+    }
+
+    static String unpair() {
+        try {
+            send("POST", "/api/tv/disconnect", "{}");
+            Prefs.clearAioPairing();
+            return null;
+        } catch (Exception e) { return message(e); }
     }
 
     /** Enough titles that franchise dedup still leaves a full row (Prefs.cards() is at least 25). */
@@ -168,10 +176,10 @@ final class Aio {
 
     /** Opens a connection to an image, with the session when the image lives on the media manager. */
     static HttpURLConnection openImage(String url) throws IOException {
-        HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+        HttpURLConnection c = AioHttp.open(url);
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
-        c.setInstanceFollowRedirects(true);
+        c.setInstanceFollowRedirects(!onServer(url) && !onJellyfin(url));
         if (onServer(url)) c.setRequestProperty("Authorization", "Bearer " + Prefs.aioToken());
         else if (onJellyfin(url)) jellyfinAuth(c);
         return c;
@@ -299,6 +307,7 @@ final class Aio {
 
     private static void ensureToken() throws IOException {
         if (!Prefs.aioToken().isEmpty()) return;
+        if (Prefs.aioPaired()) throw new IOException(Ui.tr("The AIO connection was revoked. Pair again in AIO."));
         if (Prefs.aioUrl().isEmpty() || Prefs.aioUser().isEmpty() || Prefs.aioPassword().isEmpty()) {
             throw new IOException(Ui.tr("Fill in the server, username and password."));
         }
@@ -325,7 +334,7 @@ final class Aio {
     private static JSONObject send(String method, String path, String body, boolean authed) throws IOException {
         String base = Prefs.aioUrl();
         if (base.isEmpty()) throw new IOException(Ui.tr("Fill in the server, username and password."));
-        HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();
+        HttpURLConnection c = AioHttp.open(base + path);
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
         c.setRequestMethod(method);
@@ -342,7 +351,8 @@ final class Aio {
         String text = read(in);
         if (code == 401) {
             Prefs.setAioToken("");
-            throw new IOException(Ui.tr("The media manager refused the login."));
+            throw new IOException(Prefs.aioPaired() ? Ui.tr("The AIO connection was revoked. Pair again in AIO.")
+                    : Ui.tr("The media manager refused the login."));
         }
         if (code < 200 || code >= 300) {
             String detail = text;
@@ -361,12 +371,12 @@ final class Aio {
 
     private static boolean onServer(String url) {
         String base = Prefs.aioUrl();
-        return !base.isEmpty() && url != null && url.startsWith(base);
+        return !base.isEmpty() && url != null && AioHttp.sameOrigin(base, url);
     }
 
     private static boolean onJellyfin(String url) {
         String base = Prefs.jellyfinUrl();
-        return !base.isEmpty() && url != null && url.startsWith(base);
+        return !base.isEmpty() && url != null && AioHttp.sameOrigin(base, url);
     }
 
     /** Jellyfin id on a library row: the id itself, or the id= in the item's web address. */
@@ -402,6 +412,11 @@ final class Aio {
      * The first user Jellyfin lists often has nothing in progress. No-op until a server and API key are saved.
      */
     static void resume(List<Recs.Pick> into) throws IOException {
+        if (Prefs.aioPaired()) {
+            ensureToken();
+            addResume(into, new java.util.HashSet<>(), array(get("/api/homepage/resume"), "items"));
+            return;
+        }
         if (Prefs.jellyfinUrl().isEmpty() || Prefs.jellyfinKey().isEmpty()) return;
         JSONArray users = jfList("/Users");
         List<List<Recs.Pick>> buckets = new ArrayList<>();

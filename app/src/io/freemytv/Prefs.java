@@ -461,8 +461,36 @@ final class Prefs {
         return app == null ? "" : device().getString("aioToken", "");
     }
 
+    static boolean aioPaired() { return app != null && !device().getString("aioDeviceId", "").isEmpty(); }
+
+    static boolean setAioPairing(AioPairing.Connection connection) {
+        String[] keys = {"aioUrl", "aioToken", "aioDeviceId", "aioUser", "aioPassword", "jellyfinUrl", "jellyfinKey"};
+        java.util.Map<String, String> before = new java.util.HashMap<>();
+        for (String key : keys) if (device().contains(key)) before.put(key, device().getString(key, ""));
+        boolean saved = device().edit().putString("aioUrl", connection.server).putString("aioToken", connection.token)
+                .putString("aioDeviceId", connection.id).putString("aioUser", "").putString("aioPassword", "")
+                .putString("jellyfinUrl", "").putString("jellyfinKey", "").commit();
+        if (saved) version++;
+        else {
+            // SharedPreferences changes memory even when its disk commit fails: restore the previous connection.
+            SharedPreferences.Editor undo = device().edit();
+            for (String key : keys) {
+                if (before.containsKey(key)) undo.putString(key, before.get(key));
+                else undo.remove(key);
+            }
+            undo.commit();
+        }
+        return saved;
+    }
+
+    static void clearAioPairing() {
+        device().edit().putString("aioUrl", "").putString("aioToken", "").putString("aioDeviceId", "")
+                .putString("aioUser", "").putString("aioPassword", "").commit();
+        version++;
+    }
+
     static void setAioUrl(String url) {
-        keepAio().putString("aioUrl", url == null ? "" : url.trim()).putString("aioToken", "").commit();
+        keepAio().putString("aioUrl", url == null ? "" : url.trim()).putString("aioToken", "").putString("aioDeviceId", "").commit();
         version++;
     }
 

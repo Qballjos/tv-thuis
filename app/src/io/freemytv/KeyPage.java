@@ -53,11 +53,17 @@ final class KeyPage {
     private final ServerSocket server;
     private final String path;
     private final Listener listener;
+    private final boolean aio;
     private final AtomicBoolean taken = new AtomicBoolean();      // a key came: the one this page takes
     private final AtomicInteger answering = new AtomicInteger();   // connections being answered
     private volatile boolean closed;
 
     KeyPage(InetAddress lan, Listener listener) throws IOException {
+        this(lan, listener, false);
+    }
+
+    KeyPage(InetAddress lan, Listener listener, boolean aio) throws IOException {
+        this.aio = aio;
         this.listener = listener;
         byte[] random = new byte[12];
         new SecureRandom().nextBytes(random);
@@ -257,6 +263,14 @@ final class KeyPage {
     /** How to get a key, then the field to paste it in. */
     private byte[] form() {
         StringBuilder b = top();
+        if (aio) {
+            b.append("<p>").append(esc(Ui.tr("In AIO, open Settings → Account → TV connections and create a pairing link. Paste that link here.")))
+                    .append("</p><form method=post action=\"").append(path).append("\">")
+                    .append("<textarea name=key aria-label=\"").append(esc(Ui.tr("AIO pairing link"))).append("\" rows=4 required autocomplete=off autocapitalize=off autocorrect=off spellcheck=false></textarea>")
+                    .append("<button>").append(esc(Ui.tr("Send to the TV"))).append("</button></form><p class=s>")
+                    .append(esc(Ui.tr("This page works once, for 5 minutes. Your AIO and Jellyfin passwords stay in AIO."))).append("</p>");
+            return bottom(b);
+        }
         b.append("<p>").append(esc(Ui.tr("The key brings the picks: what's trending on your streaming apps, with their photos on the screensaver.")))
                 .append("</p><p>").append(esc(Ui.tr("Free, and it takes two minutes:"))).append("</p><ol><li>")
                 .append(esc(Ui.tr("Create an account at themoviedb.org."))).append("</li><li>")
@@ -282,7 +296,7 @@ final class KeyPage {
         return bottom(b);
     }
 
-    private static StringBuilder top() {
+    private StringBuilder top() {
         return new StringBuilder(2048).append("<!doctype html><html lang=\"").append(esc(Ui.language))
                 .append("\"><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">")
                 .append("<title>Free My TV</title><style>")
@@ -293,7 +307,7 @@ final class KeyPage {
                 .append("border-radius:12px;background:#f5f5f7;color:#1c1c1e;font:600 17px system-ui,sans-serif;text-align:center;")
                 .append("text-decoration:none}.b{background:#3a3a3c;color:#f5f5f7}.s{color:#98989d;font-size:15px}")
                 .append(".ok{color:#7ee08a;font-size:20px}.no{color:#ffc266;font-size:20px}</style>")
-                .append("<h1>").append(esc(Ui.tr("TMDB key"))).append(" · Free My TV</h1>");
+                .append("<h1>").append(esc(aio ? Ui.tr("Connect with AIO") : Ui.tr("TMDB key"))).append(" · Free My TV</h1>");
     }
 
     private static byte[] bottom(StringBuilder b) {

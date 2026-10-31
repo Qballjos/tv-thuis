@@ -62,6 +62,7 @@ public final class ProfilesTest {
         credentials.put("aioUser", "test-user");
         credentials.put("aioPassword", "test-password");
         credentials.put("aioToken", "test-token");
+        credentials.put("aioDeviceId", "test-device-id");
         credentials.put("jellyfinUrl", "https://jellyfin.example.invalid");
         credentials.put("jellyfinKey", "test-jellyfin-key");
         original.data.putAll(credentials);
