@@ -1,8 +1,25 @@
 # TV Thuis
 
-Startscherm voor de televisies in huis, gebaseerd op [Free My TV](https://github.com/simbasjungles/free-my-tv) (MIT). Zelfde app-plank, weer en nachtmodus. De posterrij komt uit de eigen [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager) of uit TMDB-tips.
+Startscherm voor de televisies in huis, gebaseerd op [Free My TV](https://github.com/simbasjungles/free-my-tv) (MIT). Zelfde app-plank, weer en nachtmodus.
 
-Wat er per versie is gedaan: [docs/changelog.md](docs/changelog.md).
+Dit is **niet** het officiële Free My TV-project. TV Thuis is een huis-fork. Het origineel: [simbasjungles/free-my-tv](https://github.com/simbasjungles/free-my-tv) · [freemytv.io](https://freemytv.io).
+
+Wat er per versie is gedaan: [docs/changelog.md](docs/changelog.md). Site: [qballjos.github.io/tv-thuis](https://qballjos.github.io/tv-thuis/).
+
+## AIO Media Server Manager
+
+TV Thuis gebruikt de functies van [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager) op het startscherm:
+
+| Functie | Wat de tv doet |
+| --- | --- |
+| Verder kijken | In progress / next-up uit Jellyfin |
+| Pas toegevoegd | Nieuw in de bibliotheek (Jellyfin / Plex via de manager) |
+| Films / Series | Trending van deze week via Seerr |
+| Aanvragen | Ontbrekende titels aanvragen vanaf de tv |
+| Zoeken | Zoeken en aanvragen in Startscherm → AIO Media |
+| Plaatjes | Poster en backdrop via de manager (https) |
+
+De manager zelf staat in een aparte repo: **[Qballjos/aio-media-server-manager](https://github.com/Qballjos/aio-media-server-manager)**.
 
 ## Bovenaan het scherm
 
