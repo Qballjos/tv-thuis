@@ -388,25 +388,25 @@
 
   // MARK: - Top: title, tabs, buttons, quotes
 
-  function tabCount() { return Data.aioOn() ? 4 : 3; }
+  function tabCount() { return Data.aioTop() ? 4 : 3; }
 
   function tabKind(i) {
-    if (!Data.aioOn()) return i === 0 ? null : i === 1 ? 'movie' : 'tv';
+    if (!Data.aioTop()) return i === 0 ? null : i === 1 ? 'movie' : 'tv';
     return i === 0 ? 'resume' : i === 1 ? 'recent' : i === 2 ? 'movie' : 'tv';
   }
 
   /** Continue watching when it has titles, otherwise the first tab that does. */
   function firstTab() {
-    if (!Data.aioOn()) return 0;
+    if (!Data.aioTop()) return 0;
     for (var i = 0; i < tabCount(); i++) if (Data.picks(tabKind(i)).length) return i;
     return 0;
   }
 
   function renderTop() {
-    $('title').textContent = tr('For You');
+    $('title').textContent = Data.aioTop() ? 'AIO' : tr('For You');
     var tabs = $('tabs');
     tabs.innerHTML = '';
-    var names = Data.aioOn()
+    var names = Data.aioTop()
       ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows')]
       : [tr('Explore'), tr('Movies'), tr('Shows')];
     for (var i = 0; i < names.length; i++) {
@@ -800,6 +800,8 @@
         step: function (d) { cycle('temperature', ['auto', 'C', 'F'], unit, d); renderPanels(); }},
       {label: tr('Theme'), value: theme === 'light' ? tr('Light') : theme === 'dark' ? tr('Dark') : auto,
         step: function (d) { cycle('theme', ['auto', 'light', 'dark'], theme, d); checkNight(); }},
+      {label: tr('Top of the screen'), value: topChoice(),
+        step: function (d) { cycle('topContent', ['picks', 'aio'], Prefs.topContent() === 'aio' ? 'aio' : 'picks', d); renderTop(); renderCards(); }},
       {label: tr('Dim'), value: dimName(),
         step: function (d) { cycle('dim', ['off', 'low', 'medium', 'high', 'auto'], Prefs.dim(), d); applyDim(); }},
       {label: tr('Screensaver'), value: saverMode() === 'clock' ? tr('Clock') : tr('Photos'),
@@ -848,6 +850,10 @@
     rows.push({label: tr('About this TV'), value: '›', about: true, step: function (d) { if (d >= 0) openAbout(); }});
     if (TV.canOpenSettings) rows.push({label: tr('TV Settings'), value: '›', step: function (d) { if (d >= 0) tvSettings(); }});
     return rows;
+  }
+
+  function topChoice() {
+    return Prefs.topContent() === 'aio' ? 'AIO' : tr('Picks');
   }
 
   function cycle(name, values, current, d) {

@@ -81,7 +81,11 @@ var Prefs = (function () {
     forecast: function () { return pick('forecast', 'hours') === 'days' ? 'days' : 'hours'; },
     quotes: function () { return pick('quotes', CONFIG.showCrypto !== false); },
     coin: function (i) { var c = pick('coins', null); return c ? c[i] !== false : true; },
-    /** Picks per tab: at least 25, up to 40. A saved 3 from before is raised. */
+    /** What the top of the home screen shows: picks (Tips), continue, none (the clock) or aio. */
+    topContent: function () {
+      var t = pick('topContent', 'picks');
+      return t === 'continue' || t === 'none' || t === 'aio' ? t : 'picks';
+    },
     cards: function () { var n = pick('cards', 25); return n < 25 ? 25 : n > 40 ? 40 : n; },
     shelf: function () { return pick('shelf', null); },
     /** The shelf_apps of the build that last set the shelf, so a new one wins once over the TV's choice. */
@@ -432,25 +436,33 @@ var Data = (function () {
     return (cut > 0 ? t.slice(0, cut) : t).replace(/^\s+|\s+$/g, '');
   }
 
-  /** This hour's picks (Prefs.cards()): movies ("movie"), shows ("tv") or both (null). */
   function aioOn() { return !!Prefs.aioUrl(); }
 
+  function topAio() { return aioOn() && Prefs.topContent() === 'aio'; }
+
   function now(kind) {
+    return topAio() ? aioRows(kind) : tipRows(kind);
+  }
+
+  function aioRows(kind) {
     var list = [];
-    if (aioOn()) {
-      for (var a = 0; a < picks.length; a++) {
-        var item = picks[a];
-        if (!item.aio) continue;
-        if (kind === 'resume') { if (item.resume) list.push(item); }
-        else if (kind === 'recent' || kind === null) { if (item.recent && !item.resume) list.push(item); }
-        else if (!item.recent && !item.resume && item.kind === kind) list.push(item);
-      }
-      if (kind === 'resume') return list.slice(0, Prefs.cards());
-      return sliceHour(list);
+    for (var a = 0; a < picks.length; a++) {
+      var item = picks[a];
+      if (!item.aio) continue;
+      if (kind === 'resume') { if (item.resume) list.push(item); }
+      else if (kind === 'recent' || kind === null) { if (item.recent && !item.resume) list.push(item); }
+      else if (!item.recent && !item.resume && item.kind === kind) list.push(item);
     }
+    if (kind === 'resume') return list.slice(0, Prefs.cards());
+    return sliceHour(list);
+  }
+
+  function tipRows(kind) {
+    var list = [];
     if (!KEY) return list;
     for (var i = 0; i < picks.length; i++) {
       var p = picks[i];
+      if (p.aio) continue;
       if ((kind === null || kind === p.kind) && (!p.detailed || (p.app && usable(p.app)))) list.push(p);
     }
     if (!list.length) return list;
@@ -856,7 +868,20 @@ var Data = (function () {
   }
 
   function fetchList(done) {
-    if (aioOn()) { fetchAio(done); return; }
+    if (!aioOn()) { fetchTips(done); return; }
+    fetchAio(function (err) {
+      var aio = err ? [] : picks.slice();
+      if (!KEY) { done(aio.length ? null : err); return; }
+      fetchTips(function (err2) {
+        var tips = err2 ? [] : picks.slice();
+        if (!aio.length && err2) { done(err2); return; }
+        picks = aio.concat(tips);
+        done(null);
+      });
+    });
+  }
+
+  function fetchTips(done) {
     tmdb('/watch/providers/movie?language=' + lang() + '&watch_region=' + REGION, function (err, res) {
       if (err) { done(err); return; }
       var ids = [];
@@ -932,10 +957,26 @@ var Data = (function () {
 
   /** This hour's picks for the three tabs, without repeats (the screensaver shows them too). */
   function all() {
-    var out = [], seen = {}, kinds = aioOn() ? ['resume', 'recent', 'movie', 'tv'] : [null, 'movie', 'tv'];
-    for (var k = 0; k < kinds.length; k++) {
-      var list = now(kinds[k]);
-      for (var i = 0; i < list.length; i++) if (!seen[keyOf(list[i])]) { seen[keyOf(list[i])] = true; out.push(list[i]); }
+    var out = [], seen = {}, kinds, aio, k, list, i, id;
+    if (aioOn()) {
+      kinds = ['resume', 'recent', 'movie', 'tv'];
+      for (k = 0; k < kinds.length; k++) {
+        list = aioRows(kinds[k]);
+        for (i = 0; i < list.length; i++) {
+          id = keyOf(list[i]);
+          if (!seen[id]) { seen[id] = true; out.push(list[i]); }
+        }
+      }
+    }
+    if (KEY) {
+      kinds = [null, 'movie', 'tv'];
+      for (k = 0; k < kinds.length; k++) {
+        list = tipRows(kinds[k]);
+        for (i = 0; i < list.length; i++) {
+          id = keyOf(list[i]);
+          if (!seen[id]) { seen[id] = true; out.push(list[i]); }
+        }
+      }
     }
     return out;
   }
@@ -973,6 +1014,7 @@ var Data = (function () {
     activeCoins: activeCoins,
     hasKey: function () { return aioOn() || !!KEY; },
     aioOn: aioOn,
+    aioTop: topAio,
     checkKey: checkKey,
     /** A key typed (or removed) on the TV: the picks come again with it, or go. */
     keyChanged: function () { KEY = Prefs.tmdbKey(); recsError = ''; failedAt = 0; refreshRecs(); changed(); },

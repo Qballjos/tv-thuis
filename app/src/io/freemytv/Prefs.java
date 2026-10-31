@@ -303,13 +303,14 @@ final class Prefs {
 
     // MARK: - Top of the home screen
 
-    static final String TOP_PICKS = "picks", TOP_CONTINUE = "continue", TOP_NONE = "none";
-    static final String[] TOP_CONTENT = {TOP_PICKS, TOP_CONTINUE, TOP_NONE};
+    static final String TOP_PICKS = "picks", TOP_CONTINUE = "continue", TOP_NONE = "none", TOP_AIO = "aio";
+    /** Tips, Continue Watching, the clock, then the media manager. */
+    static final String[] TOP_CONTENT = {TOP_PICKS, TOP_CONTINUE, TOP_NONE, TOP_AIO};
 
-    /** What the cards under the title show: the recommendations (TMDB), what you were watching in your apps, or nothing. */
+    /** What the cards under the title show: Tips (TMDB), Continue Watching, the clock, or the media manager. */
     static String topContent() {
         String v = sp().getString("topContent", TOP_PICKS);
-        return v.equals(TOP_CONTINUE) || v.equals(TOP_NONE) ? v : TOP_PICKS;
+        return v.equals(TOP_CONTINUE) || v.equals(TOP_NONE) || v.equals(TOP_AIO) ? v : TOP_PICKS;
     }
 
     static void setTopContent(String v) { put("topContent", v); }

@@ -334,12 +334,18 @@ final class Recs {
 
     /** This hour's Prefs.cards(), movies only ("movie") or shows only ("tv"); null = both (the home screen tabs). */
     List<Pick> now(String kind) {
-        if (Aio.configured()) return aioNow(kind);
+        if (Aio.configured() && Prefs.TOP_AIO.equals(Prefs.topContent())) return aioNow(kind);
+        return tipsNow(kind);
+    }
+
+    /** Tips: TMDB (and Trakt), never the media manager's titles. */
+    private List<Pick> tipsNow(String kind) {
         List<Pick> out = new ArrayList<>();
-        if (!hasKey(context)) return out;    // no TMDB key: no recommendations
+        if (key().isEmpty()) return out;
         List<Pick> progress = new ArrayList<>(), liked = new ArrayList<>(), list = new ArrayList<>();
         Map<String, Boolean> have = new HashMap<>();   // one look per app, not per title (this runs every 15 s)
         for (Pick p : picks) {
+            if (p.aio) continue;
             if ((kind == null || kind.equals(p.kind))
                     && (!p.detailed || (p.pkg != null && have.computeIfAbsent(p.pkg, this::installed)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))))) {   // app missing or switched off: skip
@@ -602,9 +608,15 @@ final class Recs {
     List<Pick> wanted() {
         List<Pick> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
-        String[] kinds = Aio.configured() ? new String[] {"resume", "recent", "movie", "tv"} : new String[] {null, "movie", "tv"};
-        for (String kind : kinds) {
-            for (Pick p : now(kind)) if (seen.add(key(p))) out.add(p);
+        if (Aio.configured()) {
+            for (String kind : new String[] {"resume", "recent", "movie", "tv"}) {
+                for (Pick p : aioNow(kind)) if (seen.add(key(p))) out.add(p);
+            }
+        }
+        if (!key().isEmpty()) {
+            for (String kind : new String[] {null, "movie", "tv"}) {
+                for (Pick p : tipsNow(kind)) if (seen.add(key(p))) out.add(p);
+            }
         }
         return out;
     }
@@ -620,7 +632,9 @@ final class Recs {
 
     // MARK: - TMDB
 
+    /** Tips and the media manager, kept apart so each can be the top of the screen on its own. */
     private void fetchList(int p, Map<String, Pick> known) throws Exception {
+        List<Pick> aio = new ArrayList<>();
         if (Aio.configured()) {
             List<Pick> trending = new ArrayList<>(), recent = new ArrayList<>();
             Aio.fill(trending, recent);
@@ -630,16 +644,31 @@ final class Recs {
             } catch (Exception e) {
                 AppLog.w("continue watching: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
             }
-            List<Pick> list = new ArrayList<>();
-            list.addAll(trending);
-            list.addAll(recent);
-            list.addAll(resume);
-            picks = list;
-            period = p;
-            listAt = System.currentTimeMillis();
-            listLanguage = Ui.language;
-            return;
+            aio.addAll(trending);
+            aio.addAll(recent);
+            aio.addAll(resume);
         }
+        List<Pick> tips = new ArrayList<>();
+        if (!key().isEmpty()) {
+            try {
+                tips = fetchTips(known);
+            } catch (Exception e) {
+                if (aio.isEmpty()) throw e;
+                AppLog.w("recommendations: " + (e.getMessage() == null ? e.toString() : e.getMessage()));
+            }
+        }
+        if (aio.isEmpty() && tips.isEmpty()) throw new IOException("TMDB returned no recommendations");
+        List<Pick> list = new ArrayList<>();
+        list.addAll(aio);
+        list.addAll(tips);
+        picks = list;
+        period = p;
+        listAt = System.currentTimeMillis();
+        listLanguage = Ui.language;
+    }
+
+    /** TMDB's recommendations for Tips. The caller stores them next to the media manager's titles. */
+    private List<Pick> fetchTips(Map<String, Pick> known) throws Exception {
         // None of the services we know is on the TV (or hide_services hides them all): no region would change that.
         boolean any = false;
         for (String[] s : SERVICES) any |= installed(s[2]);
@@ -756,11 +785,8 @@ final class Recs {
         alternate(list, seen, hotMovies, hotShows, ours + POOL);
         alternate(list, seen, newMovies, newShows, ours + POOL);
         if (list.isEmpty()) throw new IOException("TMDB returned no recommendations");
-        picks = list;
         traktStamp = account;
-        period = p;
-        listAt = System.currentTimeMillis();
-        listLanguage = Ui.language;
+        return list;
     }
 
     /** A Trakt title ("movie:603") with its details, added to `out` when it's on one of the TV's services. */

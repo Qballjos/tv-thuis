@@ -804,9 +804,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         statusDirty = true;
     }
 
-    /** The tab names, made again only when the language changes (they are drawn on every frame). */
+    /** The tab names, made again only when the language or the top choice changes (they are drawn on every frame). */
     private static String[] tabs() {
-        int mode = Aio.configured() ? 1 : 0;
+        int mode = aioTabs() ? 1 : 0;
         if (tabsGeneration != Ui.generation || tabsMode != mode) {
             tabs = mode == 1
                     ? new String[] {Ui.tr("Continue watching"), Ui.tr("Recently added"), Ui.tr("Movies"), Ui.tr("Shows")}
@@ -819,9 +819,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private static int tabCount() { return tabs().length; }
 
+    /** AIO at the top: the media manager's tabs. Tips keeps Explore, Movies and Shows. */
+    private static boolean aioTabs() {
+        return Aio.configured() && Prefs.TOP_AIO.equals(Prefs.topContent());
+    }
+
     /** "resume" and "recent" are the media-manager tabs; null is Explore (movies and shows together). */
     private static String tabKind(int index) {
-        if (!Aio.configured()) return index <= 0 ? null : index == 1 ? "movie" : "tv";
+        if (!aioTabs()) return index <= 0 ? null : index == 1 ? "movie" : "tv";
         if (index <= 0) return "resume";
         if (index == 1) return "recent";
         if (index == 2) return "movie";
@@ -830,7 +835,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The first tab that has cards. Continue watching stays first when Jellyfin returned any. */
     private int firstTab() {
-        if (!Aio.configured()) return 0;
+        if (!aioTabs()) return 0;
         for (int i = 0; i < tabCount(); i++) if (!recs.now(tabKind(i)).isEmpty()) return i;
         return 0;
     }
@@ -4025,9 +4030,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     // MARK: - Continue watching (Settings > Top of the screen)
 
-    /** Picks need a TMDB key: without one, "picks" shows the clock, like "nothing". */
+    /** Tips need a TMDB key. AIO needs the media manager. Otherwise that choice shows the clock. */
     private boolean picksMode() {
-        return topMode.equals(Prefs.TOP_PICKS) && picksOn();
+        if (topMode.equals(Prefs.TOP_AIO)) return Aio.configured();
+        return topMode.equals(Prefs.TOP_PICKS) && !Recs.key().isEmpty();
     }
 
     /** The clock, the date and the weather: nothing at the top, or picks without a TMDB key. */
@@ -4064,6 +4070,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean lost = zone == Z_WATCH && list.isEmpty() || !picksMode() && (zone == Z_CARDS || zone == Z_TOP && topIndex < 3);
         if (modeChanged || lost) zone = Z_SHELF;
         if (modeChanged) {
+            layoutLight();
             updateCards();
             if (bgTo == null && bgFadeAt == 0) neutralGlass();   // the plain background depends on the mode too
             sky.invalidate();   // the background's gradient depends on the mode
@@ -4583,7 +4590,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
             return;
         }
-        String hello = picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching");
+        String hello = aioTabs() ? "AIO" : picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching");
         c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
         titleRight = MARGIN * k + lTitle.measureText(hello);
         if (!picksMode()) {
@@ -4783,7 +4790,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int color = Ui.alpha(tone(L_INK, 0xEBFFFFFF), 0.85f);
         float x = MARGIN * k;
         // The top title ("For You", or "Continue Watching") is on this line too: the icons start after it, not on it.
-        if (!clockMode()) x += lTitle.measureText(picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
+        if (!clockMode()) x += lTitle.measureText(aioTabs() ? "AIO" : picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
         if (network != 0) x = drawStatusIcon(c, network == 2 ? "ethernet" : "wifi", x, height, gap, color);
         if (bluetoothConnected) x = drawStatusIcon(c, "bluetooth", x, height, gap, color);
         if (usbConnected) drawStatusIcon(c, "usb", x, height, gap, color);
