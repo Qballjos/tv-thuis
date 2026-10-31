@@ -33,6 +33,8 @@ TCL blokkeert anders de achtergrondstart, en de omschakeling naar TV Thuis komt 
 
 De Home-knop opent daarna TV Thuis. Original in hetzelfde menu zet het Google TV-startscherm terug.
 
-De 65C75B staat niet onder die winkelnaam in de opschoonlijsten. Hij valt in de G08-familie (de C755 en de Europese Smart TV Pro op Android 12). Bij de omschakeling gaan TCL Channel, de winkeldemo, logkit, de TCL-analytics, Samba TV, T-Cast en de Google-reclamediensten uit. Het zijpaneel met meldingen gaat mee uit. Samba TV en T-Cast zitten in `com.tcl.ttvs`. Op deze generatie zit de TCL-firmware-update daar ook in, dus die updater gaat mee uit. TGuard, AirPlay, Chromecast en de spelmodus blijven aan.
+De 65C75B staat niet onder die winkelnaam in de opschoonlijsten. Hij valt in de G08-familie (de C755 en de Europese Smart TV Pro op Android 12). Bij de omschakeling gaan TCL Channel (`com.tcl.waterfall.overseas`), Rakuten TV (`tv.wuaki.apptv`), de winkeldemo, logkit, de TCL-analytics, Samba TV, T-Cast en de Google-reclamediensten uit. Het zijpaneel met meldingen gaat mee uit. Samba TV en T-Cast zitten in `com.tcl.ttvs`. Op deze generatie zit de TCL-firmware-update daar ook in, dus die updater gaat mee uit. `com.tcl.channelplus` blijft aan. TGuard, AirPlay, Chromecast en de spelmodus blijven aan.
 
 Netflix-, YouTube- en Prime-knoppen op de afstandsbediening stel je in via Remote Buttons.
+
+Updates van TV Thuis: Startscherm → Updates. Zie [changelog](../changelog.md).
