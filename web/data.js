@@ -1032,10 +1032,19 @@ var Data = (function () {
     picks: now,
     showcase: function () {
       if (!aioOn()) return all();
-      var out = [], seen = {};
-      for (var i = 0; i < picks.length; i++) {
-        var p = picks[i];
-        if (p.aio && !p.recent && !p.resume && p.backdrop && !seen[p.kind + ':' + p.id]) { seen[p.kind + ':' + p.id] = true; out.push(p); }
+      var out = [], trending = [], recent = [], seen = {}, i, p, id;
+      for (i = 0; i < picks.length; i++) {
+        p = picks[i];
+        if (!p.aio || p.resume || !p.backdrop) continue;
+        id = (p.recent ? 'r:' : 't:') + franchise(p.title);
+        if (seen[id]) continue;
+        seen[id] = true;
+        (p.recent ? recent : trending).push(p);
+      }
+      trending = trending.filter(function (p) { return !seen['r:' + franchise(p.title)]; });
+      for (i = 0; i < Math.max(trending.length, recent.length); i++) {
+        if (i < trending.length) out.push(trending[i]);
+        if (i < recent.length) out.push(recent[i]);
       }
       return out;
     },

@@ -537,11 +537,9 @@ final class Recs {
     List<Pick> showcase() {
         List<Pick> out = new ArrayList<>();
         if (Aio.configured()) {
-            java.util.Set<String> seen = new java.util.HashSet<>();
-            for (Pick p : picks) {
-                if (p.aio && !p.recent && !p.resume && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
-            }
-            return out;
+            List<Pick> ready = new ArrayList<>();
+            for (Pick p : picks) if (p.aio && hasImage(p)) ready.add(p);
+            return aioShowcase(ready);
         }
         if (!hasKey(context)) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
@@ -551,6 +549,23 @@ final class Recs {
             if (p.detailed && p.pkg != null && have.computeIfAbsent(p.pkg, this::installed) && hasImage(p)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))
                     && seen.add(franchise(p.title))) out.add(p);
+        }
+        return out;
+    }
+
+    /** Alternate ready AIO trending/library art; a newly added copy wins over the same trending franchise. */
+    static List<Pick> aioShowcase(List<Pick> ready) {
+        Map<String, Pick> trending = new LinkedHashMap<>(), recent = new LinkedHashMap<>();
+        for (Pick p : ready) {
+            if (!p.aio || p.resume) continue;
+            (p.recent ? recent : trending).putIfAbsent(franchise(p.title), p);
+        }
+        for (String title : recent.keySet()) trending.remove(title);
+        java.util.Iterator<Pick> t = trending.values().iterator(), r = recent.values().iterator();
+        List<Pick> out = new ArrayList<>();
+        while (t.hasNext() || r.hasNext()) {
+            if (t.hasNext()) out.add(t.next());
+            if (r.hasNext()) out.add(r.next());
         }
         return out;
     }

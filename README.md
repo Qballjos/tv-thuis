@@ -64,7 +64,7 @@ De nieuwe profielbediening is vertaald in Nederlands en Engels; de andere talen 
 
 ## Schermbeveiliging
 
-De schermbeveiliging toont posters (of bij AIO de trendingfoto’s) op een zwarte achtergrond, met klok en weer. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
+De schermbeveiliging toont posters (of bij AIO afwisselend trendingtitels en nieuw toegevoegde films en series) op een zwarte achtergrond, met klok en weer. Dubbele titels verschijnen één keer; de nieuw toegevoegde versie krijgt voorrang. Op Android staat daarbij **Trending** of **Nieuw toegevoegd**. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
 
 In **Startscherm → Schermbeveiliging**:
 
