@@ -1074,6 +1074,32 @@ h2 {
   color: var(--muted);
 }
 
+.fork-notice {
+  max-width: 920px;
+  margin: 88px auto 0;
+  padding: 14px 20px;
+  border-radius: 16px;
+  background: var(--glass-2);
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.fork-notice p {
+  margin: 0;
+}
+
+.fork-notice a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.fork-notice strong {
+  color: var(--ink);
+}
+
 /* ---------- FAQ ---------- */
 
 .qs {
