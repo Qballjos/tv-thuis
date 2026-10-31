@@ -183,13 +183,36 @@ final class Aio {
         return Prefs.jellyfinUrl() + "/Items/" + itemId + "/Images/" + kind + "?" + query;
     }
 
-    /** Public poster URLs get a size the TV can show; manager paths stay as they are. */
-    static String imageUrl(String poster) {
-        if (poster == null) return "";
-        String url = poster.trim();
+    /**
+     * The picture for one card shape. A Jellyfin title is asked at that shape's size. A TMDB address is rewritten to
+     * it. The manager's small art link gets the same size on the query, so every TV asks for the same file.
+     */
+    private static String sizedImage(String raw, String itemId, boolean wide) {
+        String direct = jellyfinImage(itemId, wide ? "Backdrop" : "Primary", wide ? "maxWidth=1280" : "maxHeight=780");
+        if (!direct.isEmpty()) return direct;
+        if (raw == null) return "";
+        String url = raw.trim();
         if (url.isEmpty()) return "";
         if (url.startsWith("/")) url = Prefs.aioUrl() + url;
-        return url.replace("/w92/", "/w780/").replace("/w154/", "/w780/").replace("/w185/", "/w780/").replace("/w342/", "/w780/");
+        if (url.contains("/api/homepage/art")) {
+            int q = url.indexOf('?');
+            String base = q >= 0 ? url.substring(0, q) : url;
+            String query = q >= 0 ? url.substring(q + 1) : "";
+            StringBuilder kept = new StringBuilder();
+            for (String part : query.split("&")) {
+                if (part.isEmpty() || part.startsWith("image=") || part.startsWith("fillWidth=")
+                        || part.startsWith("fillHeight=")) continue;
+                if (kept.length() > 0) kept.append('&');
+                kept.append(part);
+            }
+            if (kept.length() > 0) kept.append('&');
+            kept.append("image=").append(wide ? "Backdrop" : "Primary");
+            kept.append(wide ? "&fillWidth=1280&fillHeight=720" : "&fillWidth=780&fillHeight=1170");
+            return base + "?" + kept;
+        }
+        String size = wide ? "/w1280/" : "/w780/";
+        return url.replace("/w92/", size).replace("/w154/", size).replace("/w185/", size)
+                .replace("/w342/", size).replace("/w500/", size).replace("/w780/", size).replace("/original/", size);
     }
 
     private static void readCards(JSONArray rows, List<Recs.Pick> into, boolean recent) {
@@ -212,10 +235,8 @@ final class Aio {
             String detail = row.optString("detail", "");
             String status = row.optString("status", "");
             p.meta = status.isEmpty() ? detail : (detail.isEmpty() ? statusLabel(status) : detail + " · " + statusLabel(status));
-            String portrait = imageUrl(row.optString("poster", ""));
-            String landscape = imageUrl(row.optString("backdrop", ""));
-            if (landscape.isEmpty()) landscape = jellyfinImage(p.itemId, "Backdrop", "maxWidth=1280");
-            if (portrait.isEmpty()) portrait = jellyfinImage(p.itemId, "Primary", "maxHeight=780");
+            String portrait = sizedImage(row.optString("poster", ""), p.itemId, false);
+            String landscape = sizedImage(row.optString("backdrop", ""), p.itemId, true);
             p.imageUrl = !landscape.isEmpty() ? landscape : portrait;   // wide card
             p.posterUrl = !portrait.isEmpty() ? portrait : p.imageUrl;  // tall card
             String token = p.itemId != null ? p.itemId : p.kind + "-" + p.id;

@@ -71,6 +71,8 @@ var Prefs = (function () {
     weather: function () { return pick('weather', true); },
     /** OK on the screensaver opens the title it shows, in its app; any other key only closes it (off by default). */
     saverWatch: function () { return pick('saverWatch', false) === true; },
+    /** The key code that requests or opens the title on the screensaver (OK until another is picked). */
+    saverRequestKey: function () { var k = pick('saverRequestKey', 13); return k === 8 || k === 27 || k === 461 || k === 10009 ? 13 : k; },
     /** What the screensaver shows: 'photos' (the picks' photos, as it always has) or 'clock' (a clock and the weather). */
     saver: function () { return pick('saver', 'photos') === 'clock' ? 'clock' : 'photos'; },
     /** Dimming over the picture, for a dark room: 'off', 'low', 'medium', 'high' or 'auto' (medium at night). */
@@ -626,11 +628,30 @@ var Data = (function () {
     }, false);
   }
 
-  function aioImage(poster) {
-    if (!poster) return '';
-    var url = poster;
+  function sizedImage(raw, itemId, wide) {
+    var direct = jellyfinImage(itemId, wide ? 'Backdrop' : 'Primary', wide ? 'maxWidth=1280' : 'maxHeight=780');
+    if (direct) return direct;
+    if (!raw) return '';
+    var url = raw;
     if (url.charAt(0) === '/') url = aioBase() + url;
-    return url.replace('/w92/', '/w780/').replace('/w154/', '/w780/').replace('/w185/', '/w780/').replace('/w342/', '/w780/');
+    if (url.indexOf('/api/homepage/art') >= 0) {
+      var q = url.indexOf('?');
+      var base = q >= 0 ? url.slice(0, q) : url;
+      var query = q >= 0 ? url.slice(q + 1) : '';
+      var parts = query ? query.split('&') : [];
+      var kept = [];
+      for (var i = 0; i < parts.length; i++) {
+        if (!parts[i] || parts[i].indexOf('image=') === 0 || parts[i].indexOf('fillWidth=') === 0 || parts[i].indexOf('fillHeight=') === 0) continue;
+        kept.push(parts[i]);
+      }
+      kept.push('image=' + (wide ? 'Backdrop' : 'Primary'));
+      kept.push(wide ? 'fillWidth=1280' : 'fillWidth=780');
+      kept.push(wide ? 'fillHeight=720' : 'fillHeight=1170');
+      return base + '?' + kept.join('&');
+    }
+    var size = wide ? '/w1280/' : '/w780/';
+    return url.replace('/w92/', size).replace('/w154/', size).replace('/w185/', size)
+      .replace('/w342/', size).replace('/w500/', size).replace('/w780/', size).replace('/original/', size);
   }
 
   function isUuid(id) {
@@ -662,8 +683,8 @@ var Data = (function () {
     if (kind !== 'tv') kind = 'movie';
     var itemId = libraryId(row);
     var id = row.mediaId || (itemId ? 0 : row.id) || 0;
-    var portrait = aioImage(row.poster || '') || jellyfinImage(itemId, 'Primary', 'maxHeight=780');
-    var landscape = aioImage(row.backdrop || '') || jellyfinImage(itemId, 'Backdrop', 'maxWidth=1280');
+    var portrait = sizedImage(row.poster || '', itemId, false);
+    var landscape = sizedImage(row.backdrop || '', itemId, true);
     return {
       aio: true, recent: recent, kind: kind, id: id, itemId: itemId,
       title: row.title || '',
@@ -968,7 +989,7 @@ var Data = (function () {
     },
     image: function (path, size) {
       if (!path) return '';
-      if (path.indexOf('http') === 0 || path.charAt(0) === '/') return aioImage(path);
+      if (path.indexOf('http') === 0 || path.charAt(0) === '/') return sizedImage(path, '', size === 'w1280' || size === 'original');
       return 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path;
     },
     needsAuth: function (url) {

@@ -111,25 +111,22 @@ public class SettingsActivity extends Activity {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (preview != null) {
-            // Like the real screensaver: arrows, OK or Back close it (other keys go on to the system); with Watch from the
-            // screensaver on, OK opens the title first.
-            switch (event.getKeyCode()) {
-                case KeyEvent.KEYCODE_DPAD_UP:
-                case KeyEvent.KEYCODE_DPAD_DOWN:
-                case KeyEvent.KEYCODE_DPAD_LEFT:
-                case KeyEvent.KEYCODE_DPAD_RIGHT:
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                case KeyEvent.KEYCODE_ENTER:
-                case KeyEvent.KEYCODE_BACK:
-                    if (event.getAction() == KeyEvent.ACTION_UP) {
-                        boolean ok = event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || event.getKeyCode() == KeyEvent.KEYCODE_ENTER;
-                        if (ok && Prefs.saverWatch()) preview.watch();
-                        closePreview();
-                    }
-                    return true;
-                default:
-                    return super.dispatchKeyEvent(event);
+            // Like the real screensaver: ← → change the photo, the chosen button requests it, anything else closes.
+            int code = event.getKeyCode();
+            if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+                    || code == KeyEvent.KEYCODE_VOLUME_MUTE) return super.dispatchKeyEvent(event);
+            boolean request = Prefs.saverRequest(code);
+            boolean left = code == KeyEvent.KEYCODE_DPAD_LEFT && !request;
+            boolean right = code == KeyEvent.KEYCODE_DPAD_RIGHT && !request;
+            if (left || right) {
+                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) preview.step(left ? -1 : 1);
+                return true;
             }
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (request && Prefs.saverWatch()) preview.watch();
+                closePreview();
+            }
+            return true;
         }
         if (view.onKey(event)) return true;
         return super.dispatchKeyEvent(event);
@@ -216,6 +213,7 @@ public class SettingsActivity extends Activity {
         private static final int[] SAVER_AFTER = {300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000};
         private boolean saverOn = true;
         private int saverAfter = 600_000;
+        private boolean pickSaverKey;   // Screensaver settings is waiting for the request button
         private int whyState = -1;
         private String errorShown;
         private String aioStatus = "";
@@ -544,7 +542,7 @@ public class SettingsActivity extends Activity {
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 case POWER: return powerRows().length;
-                case SAVER: return 3;
+                case SAVER: return 4;
                 case TMDB_KEY: return keyRowIds.length;
                 case PICKS: return picksLabels().length;
                 case PICK_FROM: return Math.min(PICK_VISIBLE, services.size());
@@ -865,6 +863,26 @@ public class SettingsActivity extends Activity {
             return -1;
         }
 
+        /** The next key becomes the screensaver's request button. Back leaves it as it was. Volume stays with the TV. */
+        private boolean captureSaverKey(KeyEvent e) {
+            int code = e.getKeyCode();
+            if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+                    || code == KeyEvent.KEYCODE_VOLUME_MUTE) return false;
+            if (code == KeyEvent.KEYCODE_BACK) {
+                if (e.getAction() == KeyEvent.ACTION_UP) pickSaverKey = false;
+                invalidate();
+                return true;
+            }
+            if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                Prefs.setSaverRequestKey(code);
+                Prefs.setSaverWatch(true);
+                pickSaverKey = false;
+                spoken.focusMoved();
+            }
+            invalidate();
+            return true;
+        }
+
         /** As the arrows and TalkBack do: leaving "Top of the screen" on Continue Watching asks for its permission. */
         private void leaveTopRow(int row) {
             if (screen == HOME_SETTINGS && pickScroll + focus == TOP_ROW && row != TOP_ROW) commitWatch();
@@ -886,6 +904,7 @@ public class SettingsActivity extends Activity {
         }
 
         boolean onKey(KeyEvent e) {
+            if (pickSaverKey && screen == SAVER) return captureSaverKey(e);
             boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_UP:
@@ -965,6 +984,7 @@ public class SettingsActivity extends Activity {
                             } else {
                                 focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
                                         : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : screen == SAVER ? 1 : 0;
+                                if (screen == SAVER) pickSaverKey = false;
                                 screen = MAIN;
                             }
                         }
@@ -1294,13 +1314,15 @@ public class SettingsActivity extends Activity {
 
         private String[] listLabels() {
             if (screen == AIO) return aioLabels();
-            if (screen == SAVER) return new String[] {Ui.tr("Screensaver"), Ui.tr("Starts after"), Ui.tr("Preview")};
+            if (screen == SAVER) return new String[] {Ui.tr("Screensaver"), Ui.tr("Starts after"),
+                    Ui.tr("Request button"), Ui.tr("Preview")};
             return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : screen == PICKS ? picksLabels() : settingLabels();
         }
 
         private String[] listValues() {
             if (screen == AIO) return aioValues();
-            if (screen == SAVER) return new String[] {onOff(saverOn), SleepTimer.duration(saverAfter / 60_000), "›"};
+            if (screen == SAVER) return new String[] {onOff(saverOn), SleepTimer.duration(saverAfter / 60_000),
+                    pickSaverKey ? Ui.tr("Press the button. Back cancels.") : Prefs.saverButtonName(), "›"};
             return screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : screen == PICKS ? picksValues() : settingValues();
         }
 
@@ -2514,6 +2536,8 @@ public class SettingsActivity extends Activity {
                     ? Ui.tr("Send them from a computer: see “Your own photos” in the README.")
                     : Ui.tr("OK removes them; the arrows turn them on or off."))
                     : screen == POWER && powerRow() != P_SHOW && unavailable(focus) == null ? Ui.tr("OK opens the list. ← → change the value.")
+                    : screen == SAVER && pickSaverKey ? Ui.tr("Press the button. Back cancels.")
+                    : screen == SAVER && focus == 2 ? Ui.tr("OK, then press the button.")
                     : screen == HOME_SETTINGS && from + focus == keyRow() ? Ui.tr("OK: send it from your phone, or type it.")
                     : screen == HOME_SETTINGS && from + focus == updatesRow() ? (Updates.ready(updates, installed)
                     ? Ui.tr("OK installs it; Android asks first.") : Ui.tr("OK checks for a new version."))
@@ -2624,9 +2648,11 @@ public class SettingsActivity extends Activity {
             } else if (screen == POWER) {
                 activatePower();
             } else if (screen == SAVER) {
-                if (focus == 2) {
+                if (focus == 3) {
                     pause();
                     activity.showPreview();
+                } else if (focus == 2) {
+                    pickSaverKey = true;
                 } else {
                     adjust(1);
                 }

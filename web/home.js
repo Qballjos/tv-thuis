@@ -808,6 +808,8 @@
         step: function (d) { Prefs.set('cards', 25 + (Prefs.cards() - 25 + (d || 1) + 16) % 16); renderCards(); }},
       {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
         step: function () { Prefs.set('saverWatch', !Prefs.saverWatch()); }},
+      {label: tr('Request button'), value: saverButtonName(),
+        step: function (d) { cycleSaverButton(d); }},
       {label: tr('Weather widget'), toggle: Prefs.weather(),
         step: function () { Prefs.set('weather', !Prefs.weather()); renderPanels(); }},
       {label: tr('City'), value: Prefs.city() || '—', opens: true, city: true,
@@ -1629,7 +1631,36 @@
     try { localStorage.setItem('fmtv.night', night ? 'true' : 'false'); } catch (e) {}   // for index.html, next start
   }
 
-  var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, saverPick = null, SAVER_AFTER = 5 * 60000;
+  var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, saverPick = null, saverGo = function () {}, SAVER_AFTER = 5 * 60000;
+  var SAVER_BUTTONS = [13, 415, 403, 404, 405, 406];
+
+  function saverButtonName() {
+    var k = Prefs.saverRequestKey();
+    if (k === 13 || k === 23) return tr('OK');
+    if (k === 37) return tr('Left');
+    if (k === 39) return tr('Right');
+    if (k === 38) return tr('Up');
+    if (k === 40) return tr('Down');
+    if (k === 415 || k === 179) return tr('Play');
+    if (k === 403) return tr('Red');
+    if (k === 404) return tr('Green');
+    if (k === 405) return tr('Yellow');
+    if (k === 406) return tr('Blue');
+    return trf('Key {n}', {n: k});
+  }
+
+  function cycleSaverButton(d) {
+    var keys = SAVER_BUTTONS, at = 0, now = Prefs.saverRequestKey(), i;
+    for (i = 0; i < keys.length; i++) if (keys[i] === now) at = i;
+    Prefs.set('saverRequestKey', keys[(at + (d || 1) + keys.length) % keys.length]);
+    Prefs.set('saverWatch', true);
+  }
+
+  function saverRequests(k) {
+    var want = Prefs.saverRequestKey();
+    if ((want === 13 || want === 23) && (k === 13 || k === 23)) return true;
+    return k === want;
+  }
 
   /** "photos" (the picks' photos, as it always was) or "clock": what the screen shows when nobody touches it. */
   function saverMode() { return Prefs.saver(); }
@@ -1674,30 +1705,33 @@
     el('div', 'title', clock);
     var hint = el('div', 'hint', clock);
     var front = a;
-    function next() {
-      if (!saverOn) return;
-      var p = photos.length ? photos[saverIndex++ % photos.length] : null;
+    function showAt(i) {
+      if (!saverOn || !photos.length) return;
+      saverIndex = (i % photos.length + photos.length) % photos.length;
+      var p = photos[saverIndex];
       var back = front === a ? b : a;
-      if (p) {
-        paint(back, p.backdrop, 'original');
-        back.style.webkitTransform = back.style.transform = 'scale(1.0)';
-        clock.children[3].textContent = p.title;
-        saverPick = p;
-        // With Watch from the screensaver on, OK opens this title's app (any other key only closes).
-        var app = Prefs.saverWatch() && Data.appFor(p.app);
-        hint.textContent = app ? trf('Press OK to watch on {app} · any other button to close', {app: app.title}) : '';
-        setTimeout(function () {
-          setClass(back, 'on', true);
-          setClass(front, 'on', false);
-          back.style.webkitTransform = back.style.transform = 'scale(1.08) translateX(-1.5%)';
-          front = back;
-        }, 60);
-      }
+      paint(back, p.backdrop, 'original');
+      back.style.webkitTransform = back.style.transform = 'scale(1.0)';
+      clock.children[3].textContent = p.title;
+      saverPick = p;
+      var app = Prefs.saverWatch() && Data.appFor(p.app);
+      var button = saverButtonName();
+      hint.textContent = p.canRequest
+        ? trf('Press {button} to request · ← → for another', {button: button})
+        : (app ? trf('Press {button} to watch on {app} · ← → for another', {button: button, app: app.title}) : '');
+      setTimeout(function () {
+        setClass(back, 'on', true);
+        setClass(front, 'on', false);
+        back.style.webkitTransform = back.style.transform = 'scale(1.08) translateX(-1.5%)';
+        front = back;
+      }, 60);
       tickSaverClock(clock);
-      saverTimer = setTimeout(next, 12000);
+      clearTimeout(saverTimer);
+      saverTimer = setTimeout(function () { showAt(saverIndex + 1); }, 12000);
     }
+    saverGo = function (dir) { showAt(saverIndex + dir); };
     setClass(s, 'on', true);
-    next();
+    showAt(0);
   }
 
   function tickSaverClock(clock) {
@@ -1714,6 +1748,7 @@
 
   function hideSaver() {
     saverOn = false;
+    saverGo = function () {};
     clearTimeout(saverTimer);
     setClass($('saver'), 'on', false);
   }
@@ -1770,8 +1805,24 @@
 
   // MARK: - Keys
 
+  function actOnSaver() {
+    var p = saverPick;
+    if (Prefs.saverWatch() && p && p.aio && p.canRequest) {
+      Data.requestTitle(p.kind, p.mediaId || p.id, function (err) {
+        toast(err ? err.message : tr('Requested. It will show up in Recently added.'));
+      });
+      hideSaver();
+      return;
+    }
+    poke(Prefs.saverWatch());
+  }
+
   document.addEventListener('keydown', function (e) {
     var k = e.keyCode;
+    if (saverOn && !ambientOn) {
+      if (saverRequests(k)) { e.preventDefault(); actOnSaver(); return; }
+      if (k === TV.keys.left || k === TV.keys.right) { e.preventDefault(); saverGo(k === TV.keys.left ? -1 : 1); return; }
+    }
     if (poke(k === TV.keys.ok)) { e.preventDefault(); return; }   // the first press only wakes the screen (or OK watches)
     if (typing(k)) return;
     if (k === TV.keys.left) move(-1, 0);

@@ -6,8 +6,8 @@ import android.view.KeyEvent;
 /**
  * The Free My TV screensaver (enabled in Free My TV mode via `settings put secure screensaver_components`). The system
  * still decides when it starts and when the TV turns off (e.g. after 10 min idle, then 2 h later), as before: the app
- * doesn't change those timings. Any key exits; with Watch from the screensaver on (Home Settings), OK first opens the
- * title on screen in its app.
+ * doesn't change those timings. ← and → show the previous and next photo. The button chosen in Screensaver settings
+ * requests or opens the title (Watch from the screensaver); any other key closes it.
  */
 public class Screensaver extends DreamService {
     private DreamView view;
@@ -16,7 +16,7 @@ public class Screensaver extends DreamService {
         super.onAttachedToWindow();
         Watchdog.install(this);
         Ui.init(this);
-        setInteractive(Prefs.saverWatch());   // interactive: the keys come here instead of waking the TV
+        setInteractive(true);   // ← → stay here, instead of waking the TV
         setFullscreen(true);
         setScreenBright(true);
         view = new DreamView(this);
@@ -24,14 +24,26 @@ public class Screensaver extends DreamService {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
-        if (!isInteractive()) return super.dispatchKeyEvent(event);
         int code = event.getKeyCode();
-        boolean ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
-        // OK acts when it's released, so the app it opens doesn't get the release; any other key closes at once.
-        if (ok ? event.getAction() == KeyEvent.ACTION_UP : event.getAction() == KeyEvent.ACTION_DOWN) {
-            if (ok && view != null) view.watch();
-            finish();
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN
+                || code == KeyEvent.KEYCODE_VOLUME_MUTE) return super.dispatchKeyEvent(event);
+        boolean request = Prefs.saverRequest(code);
+        boolean left = code == KeyEvent.KEYCODE_DPAD_LEFT && !request;
+        boolean right = code == KeyEvent.KEYCODE_DPAD_RIGHT && !request;
+        if (left || right) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0 && view != null)
+                view.step(left ? -1 : 1);
+            return true;
         }
+        // The request button acts when it is released, so the app it opens doesn't get the release.
+        if (request) {
+            if (event.getAction() == KeyEvent.ACTION_UP) {
+                if (Prefs.saverWatch() && view != null) view.watch();
+                finish();
+            }
+            return true;
+        }
+        if (event.getAction() == KeyEvent.ACTION_DOWN) finish();
         return true;
     }
 

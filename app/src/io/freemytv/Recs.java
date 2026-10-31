@@ -83,7 +83,7 @@ final class Recs {
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 10;   // 10: Jellyfin on the home network can be reached again
+    private static final int CACHE_VERSION = 11;   // 11: portrait and landscape are asked at their own size
     /** TMDB's titles in the list (trending, then the new releases), as on main. */
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
@@ -1222,6 +1222,15 @@ final class Recs {
             if (!f.exists()) fetchWide(f, p);
             File poster = posterFile(p);
             String tall = p.posterUrl != null && !p.posterUrl.isEmpty() ? p.posterUrl : p.imageUrl;
+            if (poster != null && poster.exists()) {
+                BitmapFactory.Options posterBounds = new BitmapFactory.Options();
+                posterBounds.inJustDecodeBounds = true;
+                BitmapFactory.decodeFile(poster.getPath(), posterBounds);
+                if (posterBounds.outHeight > 0 && posterBounds.outHeight < 500) {
+                    //noinspection ResultOfMethodCallIgnored
+                    poster.delete();   // the manager's small poster, from before each shape had its own size
+                }
+            }
             if (poster != null && !poster.exists()) {
                 try {
                     fetchFile(poster, Aio.openImage(tall));

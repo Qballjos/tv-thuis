@@ -259,6 +259,48 @@ final class Prefs {
     static boolean saverWatch() { return sp().getBoolean("saverWatch", false); }
     static void setSaverWatch(boolean on) { put("saverWatch", on); }
 
+    /** The button that requests or opens the title on the screensaver. OK until another is picked. */
+    static int saverRequestKey() {
+        int k = sp().getInt("saverRequestKey", KeyEvent.KEYCODE_DPAD_CENTER);
+        return k == KeyEvent.KEYCODE_BACK || k == 0 ? KeyEvent.KEYCODE_DPAD_CENTER : k;
+    }
+
+    static void setSaverRequestKey(int code) {
+        if (code == KeyEvent.KEYCODE_BACK || code == KeyEvent.KEYCODE_ESCAPE || code == 0) return;
+        put("saverRequestKey", code);
+    }
+
+    /** OK is the center key and Enter, whichever the remote sends. */
+    static boolean saverRequest(int code) {
+        int want = saverRequestKey();
+        if (okKey(want) && okKey(code)) return true;
+        return code == want;
+    }
+
+    private static boolean okKey(int code) {
+        return code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER
+                || code == KeyEvent.KEYCODE_NUMPAD_ENTER;
+    }
+
+    /** The name of that button, for the menu and the line on the screensaver. */
+    static String saverButtonName() {
+        int code = saverRequestKey();
+        if (okKey(code)) return Ui.tr("OK");
+        switch (code) {
+            case KeyEvent.KEYCODE_DPAD_LEFT: return Ui.tr("Left");
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return Ui.tr("Right");
+            case KeyEvent.KEYCODE_DPAD_UP: return Ui.tr("Up");
+            case KeyEvent.KEYCODE_DPAD_DOWN: return Ui.tr("Down");
+            case KeyEvent.KEYCODE_MEDIA_PLAY:
+            case KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE: return Ui.tr("Play");
+            case KeyEvent.KEYCODE_PROG_RED: return Ui.tr("Red");
+            case KeyEvent.KEYCODE_PROG_GREEN: return Ui.tr("Green");
+            case KeyEvent.KEYCODE_PROG_YELLOW: return Ui.tr("Yellow");
+            case KeyEvent.KEYCODE_PROG_BLUE: return Ui.tr("Blue");
+            default: return Ui.trf("Key {n}", "n", code);
+        }
+    }
+
     // MARK: - Top of the home screen
 
     static final String TOP_PICKS = "picks", TOP_CONTINUE = "continue", TOP_NONE = "none";

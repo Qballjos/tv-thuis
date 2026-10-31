@@ -37,8 +37,9 @@ import java.util.concurrent.Executors;
  *  - top right, like the iPhone lock screen: the date with the weather, the big Liquid Glass clock (the photo shows
  *    through the digits, bent at the edges; Shaders.GLASS_TEXT) and the compact prices;
  *  - bottom left, the photo's caption: the time-of-day label ("TONIGHT"), the title, and genre · runtime · service.
- * Dark scrims only where there is text, stronger where the photo is bright. Any key exits (as on Apple TV); with Watch
- * from the screensaver on (Prefs.saverWatch), OK first opens the title in its app, and the caption says so.
+ * Dark scrims only where there is text, stronger where the photo is bright. ← and → show the previous and next
+ * photo. The button chosen in Screensaver settings (OK until another is picked) requests or opens the title when
+ * Watch from the screensaver is on; any other key closes it.
  * With your own photos on (Photos), those instead, without a caption.
  * Without photos (no TMDB key, or before the first fetch): the big clock over the night aurora.
  */
@@ -126,7 +127,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private boolean running, dirty = true, chromeDirty = true;
     private boolean fallback;       // the aurora with the clock (no photos)
     private boolean decoding;
-    private int generation, slides;
+    private int generation, slides, nav;
     private Slide current, incoming, prepared;
     private Glass glass;
     private String glassFor = "";
@@ -757,9 +758,10 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             c.restore();
             if (s.pick.meta != null && !s.pick.meta.isEmpty()) c.drawText(s.pick.meta, x, metaBase, metaPaint);
             if (hint) {
+                String button = Prefs.saverButtonName();
                 String line = s.pick.canRequest
-                        ? Ui.tr("Press OK to request · any other button to close")
-                        : Ui.trf("Press OK to watch on {app} · any other button to close", "app", Recs.serviceName(s.pick));
+                        ? Ui.trf("Press {button} to request · ← → for another", "button", button)
+                        : Ui.trf("Press {button} to watch on {app} · ← → for another", "button", button, "app", Recs.serviceName(s.pick));
                 c.drawText(line, x, META_BASE * k, hintPaint);
             }
         } finally {
@@ -795,6 +797,82 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         boolean opened = HomeApps.open(getContext(), HomeApps.app(p.pkg, Recs.serviceName(p), p.link), null);
         if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + p.pkg);
         return opened;
+    }
+
+    /**
+     * ← → : the previous or next photo, straight away. The automatic change then waits its usual 30 seconds.
+     * A press during a fade steps on from the photo that was coming in.
+     */
+    void step(int dir) {
+        if (!running || fallback || dir == 0) return;
+        if (incoming != null) {
+            drop(current);
+            current = incoming;
+            incoming = null;
+        }
+        if (current == null) return;
+        List<Recs.Pick> list = photos();
+        if (list.size() < 2) return;
+        int at = 0;
+        String key = Recs.key(current.pick);
+        for (int i = 0; i < list.size(); i++) if (Recs.key(list.get(i)).equals(key)) { at = i; break; }
+        Recs.Pick pick = list.get((at + (dir < 0 ? list.size() - 1 : 1)) % list.size());
+        nav++;
+        final int token = nav;
+        if (prepared != null) {
+            if (Recs.key(prepared.pick).equals(Recs.key(pick))) {
+                Slide ready = prepared;
+                prepared = null;
+                showSlide(ready);
+                prepareNext();
+                return;
+            }
+            drop(prepared);
+            prepared = null;
+        }
+        File file = pick.photo != null ? (pick.photo.exists() ? pick.photo : null) : recs.readyImage(pick);
+        if (file == null) return;
+        final int gen = generation;
+        worker.execute(() -> {
+            Bitmap[] images = null;
+            float[] light = new float[2];
+            try {
+                images = Backdrop.photo(file, PW, PH, light);
+                images[0] = withScrims(images[0], pick.photo == null, light[0], light[1]);
+                images[0] = Backdrop.gpu(images[0]);
+            } catch (Exception | OutOfMemoryError e) {
+                AppLog.w("screensaver: photo for “" + pick.title + "”: " + e.getMessage());
+            }
+            final Bitmap[] ready = images;
+            handler.post(() -> {
+                if (gen != generation || token != nav) {
+                    if (ready != null) for (Bitmap b : ready) b.recycle();
+                    return;
+                }
+                if (ready == null) return;
+                showSlide(newSlide(pick, ready[0], ready[1], light[0], light[1]));
+                prepareNext();
+            });
+        });
+    }
+
+    /** Puts a photo on screen and restarts its 30 seconds. The previous one is freed once it is no longer drawn. */
+    private void showSlide(Slide s) {
+        Slide old = current;
+        current = s;
+        current.startedAt = SystemClock.uptimeMillis();
+        bindPhotos();
+        if (old != null && old.image != s.image) drop(old);
+        invalidate();
+    }
+
+    private void drop(Slide s) {
+        if (s == null) return;
+        Bitmap image = s.image, frost = s.frost;
+        handler.postDelayed(() -> {
+            image.recycle();
+            frost.recycle();
+        }, 1000);
     }
 
     /** The caption fades out fast; the new one rises in once the photo has partly changed (like the home screen). */
