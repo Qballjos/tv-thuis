@@ -52,6 +52,7 @@
     </a>
     <nav class="links" aria-label="Sections">
       <a href="#features">Features</a>
+      <a href="#aio">AIO</a>
       <a href="#how">How it works</a>
       <a href="#install">Install</a>
       <a href="#faq">FAQ</a>
@@ -68,7 +69,9 @@
   <aside class="fork-notice" role="note">
     <p><strong>TV Thuis</strong> is a household fork for our TVs. It is <strong>not</strong> the official Free My TV project.
     The original open-source home screen is <a href="https://github.com/simbasjungles/free-my-tv" rel="noopener">Free My TV by simbasjungles</a>
-    (<a href="https://freemytv.io" rel="noopener">freemytv.io</a>). This fork adds our media manager (AIO) and home tweaks; credit and MIT license stay with the original authors.</p>
+    (<a href="https://freemytv.io" rel="noopener">freemytv.io</a>). This fork adds
+    <a href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">AIO Media Server Manager</a>
+    and home tweaks; credit and MIT license stay with the original authors.</p>
   </aside>
 
   <main id="top">
@@ -77,9 +80,12 @@
       <div class="hero-copy">
         <p class="kicker" data-reveal>Household fork · Google TV, LG &amp; Samsung</p>
         <h1 data-reveal>TV <span class="grad">Thuis.</span></h1>
-        <p class="lede" data-reveal>Our home screens run a fork of Free My TV, with picks from our AIO media manager. This is not the official Free My TV project — that lives at simbasjungles. One button still undoes everything.</p>
+        <p class="lede" data-reveal>Our home screens run a fork of Free My TV, wired to
+          <a href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">AIO Media Server Manager</a>
+          for library picks, continue watching and requests. This is not the official Free My TV project — that lives at simbasjungles. One button still undoes everything.</p>
         <div class="cta" data-reveal>
           <a class="btn btn-dark" href="https://github.com/Qballjos/tv-thuis" rel="noopener">This fork on GitHub <span aria-hidden="true">→</span></a>
+          <a class="btn btn-glass" href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">AIO Media Manager</a>
           <a class="btn btn-glass" href="https://github.com/simbasjungles/free-my-tv" rel="noopener">Original Free My TV</a>
           <button class="btn btn-glass" type="button" data-film><span class="play" aria-hidden="true"></span>Watch the 45-second film</button>
         </div>
@@ -133,7 +139,7 @@
         <div class="copy">
           <p class="kicker">Picks</p>
           <h3>Trending, not sponsored.</h3>
-          <p>Fresh picks every hour from what's trending this week and the latest releases, only from apps you already have. The focused one opens wide and the others show their posters, up to six per tab, from the services you choose. Movies and shows have their own tabs, and on Google TV your own Plex library joins in. Powered by TMDB.</p>
+          <p>Without AIO, Tips still come from TMDB: what's trending this week and the latest releases, only from apps you already have. With AIO on top of the screen, the tabs switch to continue watching, recently added, and trending movies and shows from your own stack.</p>
         </div>
         <div class="tv"><div class="screen"><video data-src="assets/tabs.mp4" poster="assets/tabs-poster.webp" muted loop playsinline preload="none" aria-label="Switching between Explore, Movies and Shows"></video></div></div>
       </article>
@@ -147,6 +153,42 @@
         </div>
         <div class="tv"><div class="screen"><video data-src="assets/drawer.mp4" poster="assets/drawer-poster.webp" muted loop playsinline preload="none" aria-label="The drawer with weather and crypto opening"></video></div></div>
       </article>
+    </section>
+
+    <!-- AIO Media Manager -->
+    <section class="section extras" id="aio">
+      <div class="head" data-reveal>
+        <p class="kicker">AIO Media Server Manager</p>
+        <h2>Our library on the home screen.</h2>
+        <p class="sub">TV Thuis talks to
+          <a href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">AIO Media Server Manager</a>
+          — the household media stack (Seerr, Jellyfin and friends). That project lives in its own repo.</p>
+      </div>
+      <ul class="steps">
+        <li class="step" data-reveal>
+          <h4>Continue watching</h4>
+          <p>In-progress and next-up titles from Jellyfin, with artwork loaded through the manager over https.</p>
+          <span class="where">AIO + Jellyfin</span>
+        </li>
+        <li class="step" data-reveal>
+          <h4>Recently added</h4>
+          <p>Films and shows that just landed in the library, with portrait and landscape art sized for the cards.</p>
+          <span class="where">AIO + Jellyfin / Plex</span>
+        </li>
+        <li class="step" data-reveal>
+          <h4>Trending &amp; request</h4>
+          <p>Weekly trending from Seerr. Missing titles can be requested from the TV; OK on a library title opens Wholphin.</p>
+          <span class="where">AIO + Seerr</span>
+        </li>
+        <li class="step" data-reveal>
+          <h4>Search on the TV</h4>
+          <p>Home Settings → AIO Media: sign in, test the connection, search and request without leaving the couch.</p>
+          <span class="where">Home Settings</span>
+        </li>
+      </ul>
+      <p class="note" data-reveal>
+        <a class="btn btn-dark btn-sm" href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">AIO Media Server Manager on GitHub <span aria-hidden="true">→</span></a>
+      </p>
     </section>
 
     <!-- More -->
@@ -362,6 +404,7 @@
       </div>
       <div class="qs" data-reveal>
         <details open><summary>Is this the official Free My TV?</summary><p><strong>No.</strong> TV Thuis is our household fork. The original project is <a href="https://github.com/simbasjungles/free-my-tv" rel="noopener">simbasjungles/free-my-tv</a> and the site <a href="https://freemytv.io" rel="noopener">freemytv.io</a>. Use those if you want Free My TV itself.</p></details>
+        <details><summary>What is AIO Media Manager?</summary><p>The household media stack that feeds continue watching, recently added, trending and requests on this fork. It lives at <a href="https://github.com/Qballjos/aio-media-server-manager" rel="noopener">Qballjos/aio-media-server-manager</a>. TV Thuis signs in to it from Home Settings → AIO Media.</p></details>
         <details><summary>Is it safe?</summary><p>It uses the same commands as Android's own developer tools, from inside the TV. Nothing is rooted or uninstalled: apps are only turned off and come back with one button. Picture, sound, inputs, the remote, Google services and the Play Store are on a never-touch list.</p></details>
         <details><summary>Which TVs does it work on?</summary><p>Google TV and Android TV from Android 8 on: TCL, Sony, Hisense, Philips, Xiaomi and more, streamers like Chromecast with Google TV and onn 4K, and LG and Samsung TVs as an app. The APK goes on the TV, not on your phone. On Huawei TVs (HarmonyOS) and Fire TV it stays an app you open, and the TV keeps its own home screen: on a Huawei, don't switch it.</p></details>
         <details><summary>How do I go back?</summary><p>Open TV Thuis → Home Screen → Original. The factory home screen, screensaver and every app come back exactly as they were. If the new home screen ever crashes three times in five minutes, it switches back on its own.</p></details>

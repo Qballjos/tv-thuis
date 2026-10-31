@@ -31,7 +31,7 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Eerder in deze fork (tot 1.3.0)
 
-- Posterrij uit de eigen [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager): inloggen, trending, recent, zoeken en aanvragen via Seerr.
+- Posterrij en AIO-tabbladen via [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager): inloggen, verder kijken (Jellyfin), pas toegevoegd, trending, zoeken en aanvragen via Seerr.
 - Jellyfin **Verder kijken** / next-up op het startscherm (met Jellyfin-server en API-sleutel in Startscherm).
 - Updates van deze fork: wekelijkse check en **Startscherm → Updates**, alleen APK’s van `Qballjos/tv-thuis`, ondertekend met dezelfde sleutel als op de tv’s.
 - Ingebouwde AIO-/Jellyfin-/stad-waarden uit `config.properties` blijven in de voorkeuren staan na een update (`keepBuiltIn`), zolang de app niet wordt verwijderd.
