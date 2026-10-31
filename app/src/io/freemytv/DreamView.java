@@ -61,6 +61,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         final Recs.Pick pick;
         final Bitmap image, frost;
         final BitmapShader shader;    // the frosted version, for the clock's glass
+        final boolean collage;
         final float lightCaption, lightClock;
         final boolean zoomIn;
         final float panX, panY;
@@ -71,8 +72,9 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             this.pick = pick;
             this.image = image;
             this.frost = frost;
-            shader = new BitmapShader(frost, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
-            Frost.filter(shader, BitmapShader.FILTER_MODE_LINEAR);
+            collage = frost == null;
+            shader = collage ? null : new BitmapShader(frost, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP);
+            if (shader != null) Frost.filter(shader, BitmapShader.FILTER_MODE_LINEAR);
             this.lightCaption = lightCaption;
             this.lightClock = lightClock;
             zoomIn = n % 2 == 0;
@@ -138,6 +140,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private String clock = "", date = "";
     private Paint datePaint, clockPaint, weatherPaint, weatherDim, quotePaint, stalePaint;
     private Paint cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, metaPaint, hintPaint;
+    private Paint collageClock, collageText, collageWeather;
     private TextPaint titlePaint;
 
     private final Runnable tick = new Runnable() {
@@ -147,6 +150,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             data.refreshIfStale();
             recs.refreshIfStale();
             recs.prefetchAll();
+            ImmichPhotos.syncIfDue(getContext(), () -> { if (running) prepareNext(); });
             dirty = true;
             chromeDirty = true;
             prepareNext();
@@ -191,6 +195,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         recs.refreshIfStale();
         recs.prefetchAll();
         Photos.importInbox(getContext(), () -> { if (running) prepareNext(); });
+        ImmichPhotos.syncIfDue(getContext(), () -> { if (running) prepareNext(); });
         prepareNext();
         handler.postDelayed(tick, 60_000);
         playing.start();
@@ -213,7 +218,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         for (Slide s : new Slide[] {current, incoming, prepared}) {
             if (s == null) continue;
             gone.add(s.image);
-            gone.add(s.frost);
+            if (s.frost != null) gone.add(s.frost);
         }
         if (!gone.isEmpty()) handler.postDelayed(() -> { for (Bitmap b : gone) b.recycle(); }, 1000);
         current = incoming = prepared = null;
@@ -266,6 +271,9 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         titlePaint.setLetterSpacing(0.005f);
         metaPaint = Ui.text(Ui.medium, 29 * k, 0xC7FFFFFF);
         hintPaint = Ui.text(Ui.regular, 24 * k, 0x99FFFFFF);
+        collageClock = Ui.numbers(Ui.thin, 86 * k, 0xD934454B);
+        collageText = Ui.text(Ui.medium, 25 * k, 0xB334454B);
+        collageWeather = Ui.numbers(Ui.regular, 32 * k, 0xD934454B);
         metaPaint.setLetterSpacing(0.014f);
         Symbols.warmWeather(getContext(), 30 * k);   // the corner's
         Symbols.warmWeather(getContext(), 32 * k);   // under the clock
@@ -289,6 +297,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** Landscape movie art when the media manager is set up; otherwise your photos, or the picks. */
     private List<Recs.Pick> photos() {
+        if (Prefs.saverCollage() && Photos.on(getContext())) return Photos.picks(getContext());
         if (Aio.configured()) return recs.showcase();
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
@@ -335,9 +344,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             Bitmap[] images = null;
             float[] light = new float[2];
             try {
-                images = Backdrop.photo(file, PW, PH, light);   // center-cropped so the movie art fills the screen
-                images[0] = withScrims(images[0], chosen.photo == null, light[0], light[1]);
-                images[0] = Backdrop.gpu(images[0]);
+                images = loadImages(chosen, file, light);
             } catch (Exception | OutOfMemoryError e) {
                 AppLog.w("screensaver: photo for “" + (chosen.photo != null ? chosen.photo.getName() : chosen.title) + "”: " + e.getMessage());
             }
@@ -345,7 +352,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             handler.post(() -> {
                 if (gen != generation) {
                     // The screensaver closed while the photo was loading: free the memory right away.
-                    if (ready != null) for (Bitmap b : ready) b.recycle();
+                    if (ready != null) for (Bitmap b : ready) if (b != null) b.recycle();
                     return;
                 }
                 decoding = false;
@@ -364,6 +371,18 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         Slide s = new Slide(pick, image, frost, lightCaption, lightClock, slides++);
         if (w > 0) recordCaption(s);
         return s;
+    }
+
+    private Bitmap[] loadImages(Recs.Pick pick, File file, float[] light) throws java.io.IOException {
+        if (pick.photo != null && Prefs.saverCollage()) {
+            Bitmap image = PhotoCollage.render(Photos.files(getContext()), file,
+                    Math.min(PW, Backdrop.W), Math.min(PH, Backdrop.H), Ui.locale());
+            return new Bitmap[] {Backdrop.gpu(image), null};
+        }
+        Bitmap[] images = Backdrop.photo(file, PW, PH, light);
+        images[0] = withScrims(images[0], pick.photo == null, light[0], light[1]);
+        images[0] = Backdrop.gpu(images[0]);
+        return images;
     }
 
     /** The prepared photo goes on screen when its turn comes (the first one right away; the others every 30 s). */
@@ -395,7 +414,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
                 Bitmap gone = old.image, goneFrost = old.frost;
                 handler.postDelayed(() -> {
                     gone.recycle();
-                    goneFrost.recycle();
+                    if (goneFrost != null) goneFrost.recycle();
                 }, 1000);
             }
             prepareNext();
@@ -404,13 +423,19 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** The photos the clock's glass shows (the current one and, during a crossfade, the incoming one). */
     private void bindPhotos() {
-        if (glassShader == null || current == null) return;
+        chromeDirty = true;
+        if (glassShader == null || current == null || current.collage) return;
         glassShader.setInputShader("imageA", current.shader);
-        glassShader.setInputShader("imageB", incoming != null ? incoming.shader : current.shader);
+        glassShader.setInputShader("imageB", incoming != null && !incoming.collage ? incoming.shader : current.shader);
     }
 
     /** Photo position and scale now: zoom from 1 to 1.1 (or back) and a pan toward a corner, never showing an edge. */
     private void place(Slide s, long up, float[] out) {
+        if (s.collage) {
+            out[0] = out[1] = 0;
+            out[2] = (float) w / s.image.getWidth();
+            return;
+        }
         float u = Ui.clamp((up - s.startedAt) / (float) (SHOW_MS + FADE_MS));
         float f = s.zoomIn ? u : 1 - u;
         float z = 1 + ZOOM * f;
@@ -459,7 +484,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             chromeDirty = true;
         }
         if (running) advance(up);
-        if (!glassFor.equals(clock)) buildGlass(clock);
+        if ((current == null || !current.collage) && !glassFor.equals(clock)) buildGlass(clock);
 
         float first = current == null ? 0 : fadeIn(up - firstAt, FIRST_MS);
         if (current == null || first < 1) {
@@ -477,8 +502,18 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             drawPhoto(canvas, incoming, placeB, e);
         }
 
-        if (chromeDirty) recordChrome();
+        if (chromeDirty) {
+            if (current.collage) recordCollageChrome();
+            else recordChrome();
+        }
         chrome.setAlpha(first);
+        if (current.collage) {
+            canvas.save();
+            canvas.translate((float) Math.sin(up / 600_000.0) * 10 * k, (float) Math.cos(up / 600_000.0) * 6 * k);
+            chrome.draw(canvas);
+            canvas.restore();
+            return;
+        }
         chrome.draw(canvas);
         if (playingCorner != null) {
             float x = RIGHT * k - playingCornerWidth - cornerCap * 0.6f - NowPlaying.barsWidth(cornerCap);
@@ -562,6 +597,33 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     }
 
     // MARK: - Corner: date and weather, glass clock, prices
+
+    private void recordCollageChrome() {
+        Canvas c = chrome.beginRecording(w, h);
+        try {
+            float right = w - MARGIN * k, base = h - 54 * k;
+            float x = right - collageClock.measureText(clock);
+            c.drawText(clock, x, base, collageClock);
+            HomeData.Weather wx = data.weather;
+            if (Prefs.weather() && !Double.isNaN(wx.temp)) {
+                String temp = HomeData.degrees(wx.temp);
+                x -= 36 * k + collageWeather.measureText(temp);
+                c.drawText(temp, x, base - 6 * k, collageWeather);
+                Symbols.draw(getContext(), c, Symbols.weather(wx.code, wx.isDay), x - 28 * k,
+                        base - 6 * k - Ui.halfCap(collageWeather), 30 * k, 0xD934454B);
+            }
+            String source = ImmichPhotos.configured(getContext()) ? "Immich" : Ui.tr("My Photos");
+            if ("album".equals(Prefs.photoSource())) source += " · " + Prefs.photoAlbumName();
+            String title = playing.text == null ? source : playing.text;
+            fit.set(collageText);
+            title = TextUtils.ellipsize(title, fit, 900 * k, TextUtils.TruncateAt.END).toString();
+            c.drawText(title, MARGIN * k, base - 38 * k, collageText);
+            c.drawText(Prefs.city(), MARGIN * k, base, collageText);
+        } finally {
+            chrome.endRecording();
+        }
+        chromeDirty = false;
+    }
 
     private void recordChrome() {
         Canvas c = chrome.beginRecording(w, h);
@@ -837,16 +899,14 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             Bitmap[] images = null;
             float[] light = new float[2];
             try {
-                images = Backdrop.photo(file, PW, PH, light);
-                images[0] = withScrims(images[0], pick.photo == null, light[0], light[1]);
-                images[0] = Backdrop.gpu(images[0]);
+                images = loadImages(pick, file, light);
             } catch (Exception | OutOfMemoryError e) {
                 AppLog.w("screensaver: photo for “" + pick.title + "”: " + e.getMessage());
             }
             final Bitmap[] ready = images;
             handler.post(() -> {
                 if (gen != generation || token != nav) {
-                    if (ready != null) for (Bitmap b : ready) b.recycle();
+                    if (ready != null) for (Bitmap b : ready) if (b != null) b.recycle();
                     return;
                 }
                 if (ready == null) return;
@@ -871,7 +931,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         Bitmap image = s.image, frost = s.frost;
         handler.postDelayed(() -> {
             image.recycle();
-            frost.recycle();
+            if (frost != null) frost.recycle();
         }, 1000);
     }
 

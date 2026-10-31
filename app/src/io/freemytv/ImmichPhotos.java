@@ -172,6 +172,8 @@ final class ImmichPhotos {
             if (Photos.count(app) >= Photos.MAX && Photos.fromImmich(app).isEmpty()) break;
             try {
                 download("/api/assets/" + id + (original ? "/original" : "/thumbnail?size=preview"), part);
+                Photos.setTakenAt(part, exif == null ? a.optString("localDateTime")
+                        : exif.optString("dateTimeOriginal", a.optString("localDateTime")));
                 // Room only now that the new one is here: a download that fails takes nothing away
                 boolean full = Photos.count(app) >= Photos.MAX;
                 if (full && !makeRoom(app, previous)) break;   // all of them are tools/photos.py's

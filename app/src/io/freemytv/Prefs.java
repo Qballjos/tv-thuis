@@ -298,6 +298,9 @@ final class Prefs {
     static boolean saverWatch() { return sp().getBoolean("saverWatch", false); }
     static void setSaverWatch(boolean on) { put("saverWatch", on); }
 
+    static boolean saverCollage() { return sp().getBoolean("saverCollage", false); }
+    static void setSaverCollage(boolean on) { put("saverCollage", on); }
+
     /** The button that requests or opens the title on the screensaver. OK until another is picked. */
     static int saverRequestKey() {
         int k = sp().getInt("saverRequestKey", KeyEvent.KEYCODE_DPAD_CENTER);

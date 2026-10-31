@@ -2,6 +2,13 @@
 
 Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-thuis)) bovenop Free My TV toevoegt of veranderde. De Android-tv’s installeren een nieuwe versie via **Startscherm → Updates**. De LG krijgt die APK niet; daar blijft een aparte webOS-installatie nodig.
 
+## Nog niet uitgebracht
+
+- **Fotocollage** als extra schermbeveiliging op Android / Google TV: maximaal drie eigen foto's met witte lijsten,
+  opnamedatums, zachte overgangen en klok en weer rechtsonder.
+- Gebruikt de bestaande Immich-bron (alle foto's of één album), ook naast AIO. Nieuwe imports bewaren de volledige
+  fotoverhouding en opnamedatum, zonder GPS-tags. De keuze voor de indeling is per profiel.
+
 ## 1.3.5
 
 - **Profielen** op Android / Google TV: aanmaken, hernoemen, wisselen en verwijderen, met 25 ingebouwde afbeeldingen (inclusief een regenboog).

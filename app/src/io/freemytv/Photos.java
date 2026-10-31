@@ -28,8 +28,8 @@ import java.util.concurrent.Executors;
  * Your own photos. A computer puts them in the app's external files folder (tools/photos.py: adb push to
  * Android/data/io.freemytv/files/photos, no permission needed) or, where adb can't reach it, through PhotoInbox; the
  * next time the home screen, the screensaver or the settings open, each one is imported once into the app's private
- * folder, turned upright (EXIF), cropped to 16:9 and re-encoded at the screensaver's size (which also drops its GPS and
- * other tags), and the original is deleted. While they are on (Home Settings > My Photos), the screensaver shows them
+ * folder, turned upright (EXIF), fitted within the screensaver's size and re-encoded (only the capture date survives,
+ * never GPS or other tags), and the original is deleted. While they are on (Home Settings > My Photos), the screensaver shows them
  * instead of the picks' photos, in the order they came, and without picks (no TMDB key) one of them is the home
  * screen's background, a new one every hour.
  */
@@ -255,6 +255,7 @@ final class Photos {
                         b.compress(Bitmap.CompressFormat.JPEG, 86, os);
                     }
                     b.recycle();
+                    setTakenAt(part, takenAt(src));
                     if (!part.renameTo(out)) throw new IOException("can't name " + out.getName());
                     count++;
                 }
@@ -329,11 +330,9 @@ final class Photos {
     }
 
     /**
-     * The photo upright (EXIF), its center cropped to w:h and filtered down to w × h; null if too small or unreadable.
-     * Only that 16:9 band is decoded (BitmapRegionDecoder), subsampled while it stays about w × h: portrait, 8 MP and
-     * 24 MP photos no longer come out 1.3–1.4× upscaled, and a 24 MP one still decodes at 3000 × 1688 (20 MB), not 48.
-     * Then it's drawn straight into the w × h result and only that is turned. Where the region decoder can't read the
-     * file, the whole photo is decoded instead, at about 4 MP at most (as before).
+     * The whole photo upright (EXIF), fitted within w × h without upscaling; null if too small or unreadable.
+     * Keep portrait photos intact for the collage; fullscreen callers still crop when they draw. Decode subsampled,
+     * then scale and turn once, so a large original never stays in memory at its original resolution.
      */
     private static Bitmap decode(File f, int w, int h) throws IOException {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
@@ -343,17 +342,15 @@ final class Photos {
         if (Math.min(bounds.outWidth, bounds.outHeight) < MIN_SIDE) return null;
         int degrees = rotation(f);
         boolean sideways = degrees == 90 || degrees == 270;
-        // Everything below is in the photo's stored orientation: a sideways one is cropped and sized as h × w.
-        int tw = sideways ? h : w, th = sideways ? w : h;
-        float ratio = (float) tw / th;
-        int cw = Math.min(bounds.outWidth, Math.round(bounds.outHeight * ratio));
-        int ch = Math.min(bounds.outHeight, Math.round(cw / ratio));
-        Rect band = new Rect((bounds.outWidth - cw) / 2, (bounds.outHeight - ch) / 2, (bounds.outWidth + cw) / 2,
-                (bounds.outHeight + ch) / 2);
+        // Size in the stored orientation, then turn the scaled result upright.
+        float scale = Math.min(1, Math.min((float) (sideways ? h : w) / bounds.outWidth,
+                (float) (sideways ? w : h) / bounds.outHeight));
+        int tw = Math.max(1, Math.round(bounds.outWidth * scale)), th = Math.max(1, Math.round(bounds.outHeight * scale));
+        int cw = bounds.outWidth, ch = bounds.outHeight;
+        Rect band = new Rect(0, 0, cw, ch);
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = 1;
-        // Halved while it stays within 10% of the result: a 12 MP photo's band decodes at 2000 px for 2112 (9 MB, not
-        // 36), and nothing comes out more than 1.1× upscaled.
+        // Sample near the final size, with at most 10% upscaling from the sampled pixels.
         while (cw / (opts.inSampleSize * 2) >= tw * 0.9f && ch / (opts.inSampleSize * 2) >= th * 0.9f) opts.inSampleSize *= 2;
         Bitmap src = null;
         Rect from;
@@ -405,6 +402,31 @@ final class Photos {
             }
         } catch (IOException | RuntimeException e) {
             return 0;
+        }
+    }
+
+    /** Wall-clock capture date only; private copies never retain location or camera metadata. */
+    static String takenAt(File f) {
+        try {
+            ExifInterface exif = new ExifInterface(f.getPath());
+            String date = exif.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL);
+            return date == null ? exif.getAttribute(ExifInterface.TAG_DATETIME) : date;
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    static void setTakenAt(File f, String date) {
+        if (date == null || date.length() < 19) return;
+        String value = date.substring(0, 19).replace('T', ' ');
+        value = value.substring(0, 10).replace('-', ':') + value.substring(10);
+        if (!value.matches("[0-9]{4}:[0-9]{2}:[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}")) return;
+        try {
+            ExifInterface exif = new ExifInterface(f.getPath());
+            exif.setAttribute(ExifInterface.TAG_DATETIME_ORIGINAL, value);
+            exif.saveAttributes();
+        } catch (IOException | RuntimeException ignored) {
+            // Some server previews have no writable EXIF; the photo still shows without a date.
         }
     }
 
