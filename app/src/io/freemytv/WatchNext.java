@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * What you were watching in your apps, from Android TV's own lists (TvContract, needs READ_TV_LISTINGS): the system
@@ -81,10 +82,17 @@ final class WatchNext {
         for (long channel : continueChannels(cr, c.getPackageName())) {
             all.addAll(read(cr, TvContract.buildPreviewProgramsUriForChannel(channel)));
         }
-        Set<String> off = Prefs.watchOff(), hidden = Prefs.watchHidden();
+        List<Item> out = select(all, Prefs.watchOff(), Prefs.watchHidden(), Prefs::appVisible);
+        for (Item it : out) it.app = appName(c, it.pkg);
+        return out;
+    }
+
+    /** Profile visibility and item choices apply before sorting, deduplication and per-app limits. */
+    static List<Item> select(List<Item> source, Set<String> off, Set<String> hidden, Predicate<String> visible) {
+        List<Item> all = new ArrayList<>(source);
         for (java.util.Iterator<Item> i = all.iterator(); i.hasNext(); ) {
             Item it = i.next();
-            if (off.contains(it.pkg) || hidden.contains(hideKey(it))) i.remove();
+            if (!visible.test(it.pkg) || off.contains(it.pkg) || hidden.contains(hideKey(it))) i.remove();
         }
         Collections.sort(all, (a, b) -> Long.compare(b.engaged, a.engaged));
         List<Item> out = new ArrayList<>();
@@ -95,7 +103,6 @@ final class WatchNext {
             int n = perApp.containsKey(it.pkg) ? perApp.get(it.pkg) : 0;
             if (n >= PER_APP || !seen.add(key)) continue;
             perApp.put(it.pkg, n + 1);
-            it.app = appName(c, it.pkg);
             out.add(it);
             if (out.size() >= MAX) break;
         }
@@ -135,7 +142,7 @@ final class WatchNext {
         }
         List<String[]> out = new ArrayList<>();
         for (String p : pkgs) {
-            if (homes.contains(p) || HomeApps.launchIntent(pm, p) == null) continue;
+            if (!Prefs.appVisible(p) || homes.contains(p) || HomeApps.launchIntent(pm, p) == null) continue;
             String name = appName(c, p);
             out.add(new String[] {p, name.isEmpty() ? p : name});
         }

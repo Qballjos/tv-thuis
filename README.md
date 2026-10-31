@@ -28,6 +28,23 @@ OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr. 
 
 De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
 
+## Profielen (Android en Google TV)
+
+De profielafbeelding rechtsboven opent de profielkeuze. Via **Profielen beheren** kun je profielen toevoegen,
+hernoemen, verwijderen en hun apps en afbeelding kiezen. Er zijn 25 ingebouwde afbeeldingen, inclusief een
+regenboog. De pijltjestoetsen bladeren door de afbeeldingen; de huidige keuze komt ook op het startscherm.
+De profielkeuze is ook bereikbaar via **Startscherm → Profielen**.
+
+Elk profiel heeft een eigen app-plank, app-zichtbaarheid, taal, thema, weer- en kaartinstellingen, inclusief de
+keuze voor Tips, Verder kijken, Klok of AIO. Een nieuw profiel begint met een kopie van het actieve profiel.
+De laatste keuze blijft bewaard na opnieuw starten. Bestaande profielen en instellingen blijven bij een update
+behouden; het laatste profiel kan niet worden verwijderd.
+
+Dit zijn startschermprofielen, geen ouderlijk toezicht. Accounts, kijkgeschiedenis en gegevens in streaming-apps
+blijven gedeeld. Ook AIO-/Jellyfin-aanmeldgegevens, TMDB-sleutel, foto's, afstandsbedieningsknoppen, slaaptimer en
+Android-rechten blijven van het hele apparaat. Apps verbergen blokkeert ze niet in Android of via casten.
+De nieuwe profielbediening is vertaald in Nederlands en Engels; de andere talen gebruiken hiervoor Engels.
+
 ## Schermbeveiliging
 
 De schermbeveiliging toont posters (of bij AIO de trendingfoto’s) op een zwarte achtergrond, met klok en weer. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.

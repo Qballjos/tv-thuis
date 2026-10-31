@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -104,12 +105,15 @@ final class Prefs {
     static volatile int version;
 
     private static Context app;
+    private static Profiles profiles;
 
     static void init(Context c) {
         app = c.getApplicationContext();
+        profiles = loadProfiles();
         migrateKeys();   // before anything reads the button choices
         keepBuiltIn();   // the next release has no config.properties, so these stay on the TV
         Ui.applyLanguage();   // the language picked on the TV, now that it can be read
+        profiles = loadProfiles();
     }
 
     /** The TV's own 12/24-hour setting (Settings → System → Date & time). */
@@ -131,7 +135,40 @@ final class Prefs {
     }
 
     private static SharedPreferences sp() {
-        return app.getSharedPreferences("settings", Context.MODE_PRIVATE);
+        return profiles.settings();
+    }
+
+    private static SharedPreferences device() { return app.getSharedPreferences("settings", Context.MODE_PRIVATE); }
+
+    @SuppressWarnings("deprecation")
+    private static Profiles loadProfiles() {
+        return new Profiles(app.getSharedPreferences("profiles", Context.MODE_MULTI_PROCESS),
+                name -> app.getSharedPreferences(name, Context.MODE_PRIVATE), Ui.tr("My profile"));
+    }
+
+    static Profiles profiles() { return profiles; }
+
+    static void profileChanged() {
+        version++;
+        Ui.applyLanguage();
+    }
+
+    private static volatile Set<String> hiddenApps = Collections.emptySet();
+    private static volatile int hiddenAt = -1;
+
+    static Set<String> hiddenApps() {
+        if (hiddenAt != version) {
+            hiddenApps = Collections.unmodifiableSet(new HashSet<>(sp().getStringSet("hiddenApps", Collections.emptySet())));
+            hiddenAt = version;
+        }
+        return hiddenApps;
+    }
+
+    static boolean appVisible(String pkg) { return pkg == null || !hiddenApps().contains(pkg); }
+
+    static void setHiddenApps(Set<String> hidden) {
+        sp().edit().putStringSet("hiddenApps", new HashSet<>(hidden)).apply();
+        version++;
     }
 
     /**
@@ -141,7 +178,9 @@ final class Prefs {
     @SuppressWarnings("deprecation")
     static void reload() {
         String before = language();
+        profiles = loadProfiles();
         app.getSharedPreferences("settings", Context.MODE_MULTI_PROCESS);
+        app.getSharedPreferences(profiles.namespace("settings"), Context.MODE_MULTI_PROCESS);
         version++;
         if (!language().equals(before)) Ui.applyLanguage();
     }
@@ -340,9 +379,9 @@ final class Prefs {
     static String forecast() { return "days".equals(sp().getString("forecast", "hours")) ? "days" : "hours"; }
     static void setForecast(String v) { put("forecast", v); }
 
-    static boolean nowPlaying() { return sp().getBoolean("nowPlaying", false); }
+    static boolean nowPlaying() { return device().getBoolean("nowPlaying", false); }
     static void setNowPlaying(boolean on) {   // committed: the main process reads it right away to allow the listener
-        sp().edit().putBoolean("nowPlaying", on).commit();
+        device().edit().putBoolean("nowPlaying", on).commit();
         version++;
     }
 
@@ -386,17 +425,17 @@ final class Prefs {
      * The TMDB key given on the TV (Home Settings > TMDB key: from a phone, or typed), or "": then config.properties'
      * one (Recs.key). Never logged.
      */
-    static String tmdbKey() { return app == null ? "" : sp().getString("tmdbKey", "").trim(); }
+    static String tmdbKey() { return app == null ? "" : device().getString("tmdbKey", "").trim(); }
 
     static void setTmdbKey(String key) {   // committed: ScreensaverAlone reads it from the main process
-        sp().edit().putString("tmdbKey", key).commit();
+        device().edit().putString("tmdbKey", key).commit();
         version++;
     }
 
     // MARK: - AIO media manager (Home Settings). The TV's values win over config.properties.
 
     static String aioUrl() {
-        String saved = app != null && sp().contains("aioUrl") ? sp().getString("aioUrl", "") : Config.AIO_URL;
+        String saved = app != null && device().contains("aioUrl") ? device().getString("aioUrl", "") : Config.AIO_URL;
         if (saved == null) return "";
         saved = saved.trim();
         while (saved.endsWith("/")) saved = saved.substring(0, saved.length() - 1);
@@ -404,19 +443,19 @@ final class Prefs {
     }
 
     static String aioUser() {
-        String saved = app != null && sp().contains("aioUser") ? sp().getString("aioUser", "") : Config.AIO_USER;
+        String saved = app != null && device().contains("aioUser") ? device().getString("aioUser", "") : Config.AIO_USER;
         return saved == null ? "" : saved.trim();
     }
 
     static String aioPassword() {
-        String saved = app != null && sp().contains("aioPassword") ? sp().getString("aioPassword", "") : Config.AIO_PASSWORD;
+        String saved = app != null && device().contains("aioPassword") ? device().getString("aioPassword", "") : Config.AIO_PASSWORD;
         return saved == null ? "" : saved;
     }
 
     static boolean aioPasswordSet() { return !aioPassword().isEmpty(); }
 
     static String aioToken() {
-        return app == null ? "" : sp().getString("aioToken", "");
+        return app == null ? "" : device().getString("aioToken", "");
     }
 
     static void setAioUrl(String url) {
@@ -436,13 +475,13 @@ final class Prefs {
 
     static void setAioToken(String token) {
         if (app == null) return;
-        sp().edit().putString("aioToken", token == null ? "" : token).commit();
+        device().edit().putString("aioToken", token == null ? "" : token).commit();
         version++;
     }
 
     /** Jellyfin, for continue watching. The API key is the one from the server's dashboard. */
     static String jellyfinUrl() {
-        String saved = app != null && sp().contains("jellyfinUrl") ? sp().getString("jellyfinUrl", "") : Config.JELLYFIN_URL;
+        String saved = app != null && device().contains("jellyfinUrl") ? device().getString("jellyfinUrl", "") : Config.JELLYFIN_URL;
         if (saved == null) return "";
         saved = saved.trim();
         while (saved.endsWith("/")) saved = saved.substring(0, saved.length() - 1);
@@ -450,7 +489,7 @@ final class Prefs {
     }
 
     static String jellyfinKey() {
-        String saved = app != null && sp().contains("jellyfinKey") ? sp().getString("jellyfinKey", "") : Config.JELLYFIN_KEY;
+        String saved = app != null && device().contains("jellyfinKey") ? device().getString("jellyfinKey", "") : Config.JELLYFIN_KEY;
         return saved == null ? "" : saved.trim();
     }
 
@@ -460,13 +499,13 @@ final class Prefs {
         if (app == null) return;
         String value = url == null ? "" : url.trim();
         while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
-        sp().edit().putString("jellyfinUrl", value).commit();
+        device().edit().putString("jellyfinUrl", value).commit();
         version++;
     }
 
     static void setJellyfinKey(String key) {
         if (app == null) return;
-        sp().edit().putString("jellyfinKey", key == null ? "" : key.trim()).commit();
+        device().edit().putString("jellyfinKey", key == null ? "" : key.trim()).commit();
         version++;
     }
 
@@ -475,7 +514,7 @@ final class Prefs {
      * without config.properties, and these values would otherwise go with it.
      */
     private static void keepBuiltIn() {
-        SharedPreferences s = sp();
+        SharedPreferences s = device();
         SharedPreferences.Editor e = s.edit();
         boolean changed = false;
         if (!s.contains("tmdbKey") && !Config.TMDB_KEY.trim().isEmpty()) {
@@ -493,21 +532,21 @@ final class Prefs {
             e.putString("jellyfinKey", Config.JELLYFIN_KEY == null ? "" : Config.JELLYFIN_KEY.trim());
             changed = true;
         }
-        if (!s.contains("city") && !Config.CITY.trim().isEmpty()) {
-            e.putString("city", Config.CITY.trim());
-            e.putString("latitude", Config.LATITUDE.trim());
-            e.putString("longitude", Config.LONGITUDE.trim());
-            changed = true;
-        }
         if (changed) e.commit();
+        SharedPreferences profile = sp();
+        if (!profile.contains("city") && !Config.CITY.trim().isEmpty()) {
+            profile.edit().putString("city", Config.CITY.trim())
+                    .putString("latitude", Config.LATITUDE.trim())
+                    .putString("longitude", Config.LONGITUDE.trim()).commit();
+        }
     }
 
     /** Copies the build's values the first time the TV saves one field, so the others are not lost. */
     private static android.content.SharedPreferences.Editor keepAio() {
-        android.content.SharedPreferences.Editor e = sp().edit();
-        if (!sp().contains("aioUrl")) e.putString("aioUrl", Config.AIO_URL);
-        if (!sp().contains("aioUser")) e.putString("aioUser", Config.AIO_USER);
-        if (!sp().contains("aioPassword")) e.putString("aioPassword", Config.AIO_PASSWORD);
+        android.content.SharedPreferences.Editor e = device().edit();
+        if (!device().contains("aioUrl")) e.putString("aioUrl", Config.AIO_URL);
+        if (!device().contains("aioUser")) e.putString("aioUser", Config.AIO_USER);
+        if (!device().contains("aioPassword")) e.putString("aioPassword", Config.AIO_PASSWORD);
         return e;
     }
 
@@ -531,25 +570,25 @@ final class Prefs {
     // MARK: - Sleep timer
 
     /** When the sleep timer ends (System.currentTimeMillis); SleepTimer's alarm says whether it's still on. */
-    static long sleepAt() { return sp().getLong("sleepAt", 0); }
+    static long sleepAt() { return device().getLong("sleepAt", 0); }
 
     /** When it was set, in uptimeMillis (dumpsys power's clock): a TV turned off since ended it (SleepTimer.check). */
-    static long sleepFrom() { return sp().getLong("sleepFrom", 0); }
+    static long sleepFrom() { return device().getLong("sleepFrom", 0); }
 
     // No version++ for the sleep settings: HomeActivity would rebuild the home screen and fetch the weather again for a
     // timer; HomeView reads what it needs on resume and every 15 s (updateSleep).
     static void setSleepAt(long at, long from) {
-        sp().edit().putLong("sleepAt", at).putLong("sleepFrom", from).apply();
+        device().edit().putLong("sleepAt", at).putLong("sleepFrom", from).apply();
     }
 
     /** The sleep timer's minutes left on screen: over any app (SleepOverlay), or where this TV can't, on the home screen. */
-    static boolean sleepShown() { return sp().getBoolean("sleepShown", true); }
-    static void setSleepShown(boolean on) { sp().edit().putBoolean("sleepShown", on).apply(); }
+    static boolean sleepShown() { return device().getBoolean("sleepShown", true); }
+    static void setSleepShown(boolean on) { device().edit().putBoolean("sleepShown", on).apply(); }
 
     /** Where it shows over other apps: SleepOverlay's places, the top center first. */
-    static int sleepPlace() { return sp().getInt("sleepPlace", 0); }
+    static int sleepPlace() { return device().getInt("sleepPlace", 0); }
 
-    static void setSleepPlace(int place) { sp().edit().putInt("sleepPlace", place).apply(); }
+    static void setSleepPlace(int place) { device().edit().putInt("sleepPlace", place).apply(); }
 
     // MARK: - Top buttons
 
@@ -665,7 +704,7 @@ final class Prefs {
     /** Choices saved before they moved to the file (in SharedPreferences) are copied there once. */
     private static void migrateKeys() {
         if (keysFile().exists()) return;
-        SharedPreferences old = sp();
+        SharedPreferences old = device();
         boolean any = false;
         for (int key : KEYS) any |= old.contains("key" + key);
         if (!any) return;
