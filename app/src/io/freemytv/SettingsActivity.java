@@ -17,6 +17,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.text.InputType;
 import android.text.StaticLayout;
 import android.text.TextPaint;
@@ -150,7 +151,7 @@ public class SettingsActivity extends Activity {
 
     static final class SettingsView extends View implements Choreographer.FrameCallback {
         private static final int MAIN = 0, HOME_CHOICE = 1, HOME_SETTINGS = 2, REMOTE_KEYS = 3, PICKER = 4, SHELF_EDIT = 5,
-                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, AIO = 10, WATCH_APPS = 11;
+                POWER = 6, TMDB_KEY = 7, PICKS = 8, PICK_FROM = 9, AIO = 10, WATCH_APPS = 11, SAVER = 12;
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
@@ -211,6 +212,10 @@ public class SettingsActivity extends Activity {
         private String[] whyRows;  // each row's reason, worked out once per screen (null: again on the next frame)
         private int whyScreen = -1, whyScroll = -1;
         private int sleepLeft;     // the sleep timer's minutes left, read with the state, not on every frame
+        /** How long the TV waits before the screensaver: the same steps Google TV offered. */
+        private static final int[] SAVER_AFTER = {300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000};
+        private boolean saverOn = true;
+        private int saverAfter = 600_000;
         private int whyState = -1;
         private String errorShown;
         private String aioStatus = "";
@@ -327,10 +332,11 @@ public class SettingsActivity extends Activity {
                                 : freeActive() ? "Free My TV" : Ui.tr("Original");
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
-                    String[] names = {Ui.tr("Screensaver, preview"), Ui.tr("Home Settings"),
+                    String[] names = {Ui.tr("Home Settings"),
                             Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
                             Ui.tr("TV Settings")};
-                    return row - 1 < names.length ? names[row - 1] : "";
+                    if (row == 1) return Ui.trf("Screensaver, {value}", "value", saverSummary());
+                    return row - 2 < names.length ? names[row - 2] : "";
                 }
                 case HOME_CHOICE: {
                     String name = row == 0 ? "Free My TV, " + Ui.tr("no ads, with the new screensaver")
@@ -341,7 +347,8 @@ public class SettingsActivity extends Activity {
                 case HOME_SETTINGS:
                 case REMOTE_KEYS:
                 case PICKS:
-                case POWER: {
+                case POWER:
+                case SAVER: {
                     boolean keys = screen == REMOTE_KEYS;
                     String[] labels = listLabels(), values = listValues();
                     int at = keys ? row : pickScroll + row;
@@ -408,6 +415,7 @@ public class SettingsActivity extends Activity {
             if (running) return;
             running = true;
             whyRows = null;
+            readSaver();
             startedAt = SystemClock.uptimeMillis();
             lastNanos = 0;
             handler.post(poll);
@@ -536,6 +544,7 @@ public class SettingsActivity extends Activity {
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 case POWER: return powerRows().length;
+                case SAVER: return 3;
                 case TMDB_KEY: return keyRowIds.length;
                 case PICKS: return picksLabels().length;
                 case PICK_FROM: return Math.min(PICK_VISIBLE, services.size());
@@ -590,7 +599,7 @@ public class SettingsActivity extends Activity {
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
                     Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
                     Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, Ui.tr("Preview"), "", "", "", "", "", ""};
+            String[] values = {working ? "" : mode, saverSummary(), "", "", "", "", "", ""};
             for (int i = 0; i < labels.length; i++) {
                 float y = (MAIN_TOP + i * (ROW_H + MAIN_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
@@ -897,7 +906,7 @@ public class SettingsActivity extends Activity {
                 case KeyEvent.KEYCODE_DPAD_RIGHT:
                     if (down && screen == SHELF_EDIT) {
                         moveShelfApp(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
-                    } else if (down && (screen == HOME_SETTINGS || screen == REMOTE_KEYS || screen == POWER || screen == PICKS || screen == PICK_FROM)) {
+                    } else if (down && (screen == HOME_SETTINGS || screen == REMOTE_KEYS || screen == POWER || screen == PICKS || screen == PICK_FROM || screen == SAVER)) {
                         adjust(e.getKeyCode() == KeyEvent.KEYCODE_DPAD_RIGHT ? 1 : -1);
                     }
                     whyRows = null;   // a value or the rows' order changed: what each row needs may have too
@@ -955,7 +964,7 @@ public class SettingsActivity extends Activity {
                                 screen = HOME_SETTINGS;
                             } else {
                                 focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
-                                        : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : 0;
+                                        : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : screen == SAVER ? 1 : 0;
                                 screen = MAIN;
                             }
                         }
@@ -1285,12 +1294,35 @@ public class SettingsActivity extends Activity {
 
         private String[] listLabels() {
             if (screen == AIO) return aioLabels();
+            if (screen == SAVER) return new String[] {Ui.tr("Screensaver"), Ui.tr("Starts after"), Ui.tr("Preview")};
             return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : screen == PICKS ? picksLabels() : settingLabels();
         }
 
         private String[] listValues() {
             if (screen == AIO) return aioValues();
+            if (screen == SAVER) return new String[] {onOff(saverOn), SleepTimer.duration(saverAfter / 60_000), "›"};
             return screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : screen == PICKS ? picksValues() : settingValues();
+        }
+
+        /** On, or how long the TV waits, for the main menu and TalkBack. */
+        private String saverSummary() {
+            return saverOn ? SleepTimer.duration(saverAfter / 60_000) : Ui.tr("Off");
+        }
+
+        /** What the TV is set to now. An odd wait (not one of the steps) shows as the nearest step until they change it. */
+        private void readSaver() {
+            android.content.ContentResolver r = getContext().getContentResolver();
+            saverOn = Settings.Secure.getInt(r, "screensaver_enabled", 1) == 1;
+            int ms = Settings.System.getInt(r, Settings.System.SCREEN_OFF_TIMEOUT, 600_000);
+            saverAfter = SAVER_AFTER[0];
+            int dist = Math.abs(ms - saverAfter);
+            for (int t : SAVER_AFTER) {
+                int d = Math.abs(ms - t);
+                if (d < dist) {
+                    saverAfter = t;
+                    dist = d;
+                }
+            }
         }
 
         private String[] aioLabels() {
@@ -1408,6 +1440,18 @@ public class SettingsActivity extends Activity {
                     int n = Prefs.cards() - Recs.MIN_CARDS, span = Recs.MAX_CARDS - Recs.MIN_CARDS + 1;
                     Prefs.setCards(Recs.MIN_CARDS + (n + dir + span) % span);
                 }
+                return;
+            }
+            if (screen == SAVER) {
+                if (focus == 0) saverOn = !saverOn;
+                else if (focus == 1) {
+                    int at = 0;
+                    for (int i = 0; i < SAVER_AFTER.length; i++) if (SAVER_AFTER[i] == saverAfter) at = i;
+                    saverAfter = SAVER_AFTER[(at + dir + SAVER_AFTER.length) % SAVER_AFTER.length];
+                } else {
+                    return;
+                }
+                HomeMode.setScreensaver(getContext(), saverOn, saverAfter);
                 return;
             }
             if (screen == POWER) {
@@ -2431,7 +2475,7 @@ public class SettingsActivity extends Activity {
             String[] values = listValues();
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
             c.drawText(keys ? Ui.tr("Remote Buttons") : screen == POWER ? Ui.tr("Sleep Timer") : screen == PICKS ? Ui.tr("Picks")
-                    : screen == AIO ? Ui.tr("AIO Media") : Ui.tr("Home Settings"),
+                    : screen == AIO ? Ui.tr("AIO Media") : screen == SAVER ? Ui.tr("Screensaver") : Ui.tr("Home Settings"),
                     LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             float pitch = LIST_ROW_H + LIST_ROW_GAP;
             int rows = keys ? labels.length : rowCount(), from = keys ? 0 : pickScroll;
@@ -2579,6 +2623,13 @@ public class SettingsActivity extends Activity {
                 return;
             } else if (screen == POWER) {
                 activatePower();
+            } else if (screen == SAVER) {
+                if (focus == 2) {
+                    pause();
+                    activity.showPreview();
+                } else {
+                    adjust(1);
+                }
             } else if (screen == PICKS && focus == traktRow()) {
                 traktOk();
                 invalidate();
@@ -2596,8 +2647,10 @@ public class SettingsActivity extends Activity {
                 screen = HOME_CHOICE;
                 focus = freeActive() ? 0 : 1;
             } else if (focus == 1) {
-                pause();
-                activity.showPreview();
+                pickScroll = 0;
+                screen = SAVER;
+                focus = 0;
+                readSaver();
             } else if (focus == 2) {
                 screen = HOME_SETTINGS;
                 focus = 0;

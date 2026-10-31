@@ -126,6 +126,7 @@ final class HomeMode {
         "com.tcl.magiconnectfree", "com.tcl.miracast",                                // screen mirroring apps
         "com.tcl.MultiScreenInteraction_TV",                                          // TCL's own mirroring promo
         "com.tcl.waterfall.overseas", "com.tcl.channelplus",                          // TCL Channel and its Live TV
+        "tv.wuaki.apptv",                                                             // Rakuten TV
         "com.tcl.messagebox", "com.tcl.usercenter", "com.tcl.notereminder",           // TCL messages, account, promo reminders
         "com.tcl.exhibit", "com.tcl.esticker", "com.tcl.hotelmenu",                   // store demo, hotel menu
         "com.tcl.repairguide", "com.tcl.ocean.instructions", "com.tcl.logkit",        // repair guide, manual, logs
@@ -181,7 +182,6 @@ final class HomeMode {
         // Hotack X1BR projector (LuminaOS, Android 14): its home, settings, Wi-Fi, Bluetooth and keystone in one (#342)
         "com.htc.luminaos",
         "com.tcl.channelplus",                                                        // the channel source TCL's Live TV tunes (off: black screen)
-        "com.tcl.waterfall.overseas",                                                 // TCL Channel: partnercustomizer's entry and key open it
         "com.google.android.gms", "com.google.android.gsf", "com.android.vending", "com.google.android.apps.mediashell",
         "com.google.android.tv.remote.service", "com.google.android.inputmethod.latin", "com.google.android.webview",
         "com.android.tv.settings", "com.android.systemui", "android", PKG,
@@ -1142,6 +1142,33 @@ final class HomeMode {
         else adb.shell("settings put secure screensaver_components '" + saver + "'");
     }
 
+    /**
+     * Screensaver on or off, and how long the TV waits. The settings screen can't write these itself, so this goes
+     * through the TV's own ADB, like the switch. `spec` is "1 600000" (on, milliseconds) or "0 600000".
+     */
+    static void setScreensaver(Context c, boolean on, int timeoutMs) {
+        ModeJob.schedule(c, ModeJob.SAVER, (on ? "1 " : "0 ") + timeoutMs, 0);
+    }
+
+    static void screensaverNow(Context app, String spec) {
+        String[] parts = spec == null ? new String[0] : spec.split(" ");
+        if (parts.length != 2 || (!parts[0].equals("0") && !parts[0].equals("1"))) return;
+        int ms;
+        try {
+            ms = Integer.parseInt(parts[1]);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (ms < 60_000 || ms > 4 * 3_600_000) return;
+        try (Adb adb = Adb.connect(app, 8_000, null)) {
+            adb.shell("settings put secure screensaver_enabled " + parts[0]);
+            adb.shell("settings put system screen_off_timeout " + ms);
+            if (parts[0].equals("1")) adb.shell("settings put secure screensaver_activate_on_sleep 1");
+        } catch (IOException e) {
+            AppLog.w("screensaver: " + e.getMessage());
+        }
+    }
+
     /** The system's default screensaver ("package/service"), or "". */
     private static String defaultDream(Adb adb) throws IOException {
         String d = adb.shell("settings get secure screensaver_default_component").trim();
@@ -1389,7 +1416,7 @@ final class HomeMode {
     }
 
     /**
-     * Turned off by an earlier version and protected now (TCL's Live TV source and TCL Channel): back on, and out of
+     * Turned off by an earlier version and protected now (TCL's Live TV source): back on, and out of
      * {@code record} (with {@code offNow}). Only those: one that is merely not a target this time (the old home screen
      * after a reinstall that recorded another) stays as it is, since turned on here it could take the Home button.
      * Never Google TV's setup app or the TV's home screen here. Returns the ones still off that wouldn't turn on; they

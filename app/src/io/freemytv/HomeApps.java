@@ -170,6 +170,7 @@ final class HomeApps {
             "com.google.android.play.games",        // Google Play Games
             "com.tcl.t_solo",                       // TCL: T-Solo
             "com.tcl.waterfall.overseas",           // TCL Channel
+            "tv.wuaki.apptv",                       // Rakuten TV
             "com.tcl.dashboard",                    // TCL Home
             "com.tcl.ocean.instructions",           // TCL: User Guide
             "com.tcl.guard",                        // TCL: Safety Guard
