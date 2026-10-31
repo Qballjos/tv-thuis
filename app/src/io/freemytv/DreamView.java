@@ -295,10 +295,9 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     // MARK: - Photos
 
-    /** Landscape movie art when the media manager is set up; otherwise your photos, or the picks. */
+    /** An explicit album never falls back to unrelated art while loading or empty; own photos also win over AIO. */
     private List<Recs.Pick> photos() {
-        if (Prefs.saverCollage() && Photos.on(getContext())) return Photos.picks(getContext());
-        if (Aio.configured()) return recs.showcase();
+        if (Prefs.photos() && "album".equals(Prefs.photoSource())) return Photos.picks(getContext());
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
 

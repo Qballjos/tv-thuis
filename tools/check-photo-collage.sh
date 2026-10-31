@@ -12,9 +12,10 @@ java -ea -cp "$test_dir:out/classes:$AJ" io.freemytv.PhotoCollageTest
 if [ "$#" -eq 0 ]; then exit 0; fi
 case "$1" in emulator-*) ;; *) echo 'Graphics checks require a disposable emulator, never a TV.' >&2; exit 2 ;; esac
 mkdir "$test_dir/dex"
-"$BT/d8" --lib "$AJ" --classpath out/classes --output "$test_dir/dex" "$test_dir/io/freemytv/PhotoCollageTest.class"
+"$BT/d8" --lib "$AJ" --classpath out/classes --output "$test_dir/dex" "$test_dir"/io/freemytv/PhotoCollageTest*.class
 (cd "$test_dir/dex" && zip -q "$test_dir/runner.jar" classes.dex)
 remote="/data/local/tmp/tv-thuis-collage-test"
+adb -s "$1" install -r FreeMyTV.apk >/dev/null
 adb -s "$1" shell mkdir -p "$remote"
 adb -s "$1" push FreeMyTV.apk "$remote/app.apk" >/dev/null
 adb -s "$1" push "$test_dir/runner.jar" "$remote/runner.jar" >/dev/null

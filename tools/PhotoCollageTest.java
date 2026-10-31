@@ -90,7 +90,77 @@ public final class PhotoCollageTest {
         Bitmap collage = PhotoCollage.render(files, files.get(3), 1280, 720, Locale.US);
         save(collage, new File(folder, "collage-720p.jpg"));
         collage.recycle();
+        cacheSelections(folder);
         System.out.println("Photo collage: portrait, landscape, square, EXIF rotation, date, GPS removal and 1/2/3-photo drawing passed.");
+        System.exit(0);   // Android's preferences worker otherwise keeps app_process alive
+    }
+
+    private static void cacheSelections(File folder) throws Exception {
+        Class<?> activityThread = Class.forName("android.app.ActivityThread");
+        Object thread = activityThread.getMethod("currentActivityThread").invoke(null);
+        android.content.Context system = (android.content.Context) activityThread.getMethod("getSystemContext").invoke(thread);
+        system = system.createPackageContext("io.freemytv", 0);
+        final android.content.Context packageContext = system;
+        android.content.SharedPreferences registry = system.getSharedPreferences("tv_thuis_test_profiles", 0);
+        registry.edit().clear().commit();
+        Profiles profiles = new Profiles(registry, name -> packageContext.getSharedPreferences("tv_thuis_test_" + name, 0), "Test");
+        java.lang.reflect.Field field = Prefs.class.getDeclaredField("profiles");
+        field.setAccessible(true);
+        field.set(null, profiles);
+        File root = new File(folder, "cache-selection");
+        android.content.Context context = new android.content.ContextWrapper(packageContext) {
+            @Override public File getFilesDir() { return root; }
+            @Override public android.content.Context getApplicationContext() { return this; }
+            @Override public File getExternalFilesDir(String type) { return null; }
+            @Override public android.content.SharedPreferences getSharedPreferences(String name, int mode) {
+                return packageContext.getSharedPreferences("tv_thuis_test_" + name, mode);
+            }
+        };
+        field = Prefs.class.getDeclaredField("app");
+        field.setAccessible(true);
+        field.set(null, context);
+        File photos = new File(root, "photos");
+        photos.mkdirs();
+        File[] old = photos.listFiles();
+        if (old != null) for (File file : old) file.delete();
+        Prefs.setPhotoSource("immich", "", "");
+        ImmichSource all = ImmichPhotos.source();
+        File global = new File(photos, "1800000000000-123" + ImmichSource.importedSuffix(all.inboxName("global")));
+        global.createNewFile();
+        File legacy = new File(photos, "1800000000001-123-immich.jpg");
+        legacy.createNewFile();
+        File manual = new File(photos, "1800000000002-123.jpg");
+        manual.createNewFile();
+        check(Photos.files(context).contains(global) && Photos.files(context).contains(manual), "all-photos cache and manual import available");
+        String album = "01234567-89ab-4cde-8fab-0123456789ab";
+        Prefs.setPhotoSource("album", album, "Selected album");
+        check(Photos.files(context).isEmpty(), "switch immediately hides global, legacy and manual photos while album is loading/offline");
+        ImmichSource selected = ImmichPhotos.source();
+        File inbox = Photos.privateInbox(context);
+        inbox.mkdirs();
+        java.nio.file.Files.copy(new File(folder, "photo-0.jpg").toPath(), new File(inbox, selected.inboxName("chosen")).toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        check(Photos.importWaiting(context) == 1, "downloaded photo imports with its album tag");
+        check(Photos.files(context).size() == 1, "newly fetched album photos become visible");
+        File chosen = Photos.files(context).get(0);
+        check(selected.visible(chosen), "imported filename retains the album identity");
+        Prefs.setPhotoSource("album", "12345678-9abc-4def-8abc-123456789abc", "Empty album");
+        check(Photos.files(context).isEmpty(), "empty album never falls back to another album");
+        Prefs.setPhotoSource("album", album, "Selected album");
+        check(Photos.files(context).size() == 1 && Photos.files(context).contains(chosen), "switching back reuses only that album despite unchanged directory stamp");
+        check(global.exists() && legacy.exists() && manual.exists(), "filtering never deletes originals or other cached selections");
+        context.getSharedPreferences("settings", 0).edit().putString("aioUrl", "https://media.example.invalid").commit();
+        Prefs.setPhotos(true);
+        Prefs.setSaverCollage(false);
+        Ui.init(context);
+        DreamView view = new DreamView(context);
+        Method source = DreamView.class.getDeclaredMethod("photos");
+        source.setAccessible(true);
+        List<?> picks = (List<?>) source.invoke(view);
+        check(picks.size() == 1 && chosen.equals(((Recs.Pick) picks.get(0)).photo), "fullscreen album wins over configured AIO art");
+        Prefs.setPhotoSource("album", "12345678-9abc-4def-8abc-123456789abc", "Empty album");
+        check(((List<?>) source.invoke(view)).isEmpty(), "empty fullscreen album uses clock fallback, never movie art");
+        System.out.println("Immich cache: real directory filtering, pending/empty albums and repeated switches passed.");
     }
 
     private static void save(Bitmap b, File f) throws Exception {

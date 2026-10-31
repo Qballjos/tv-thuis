@@ -78,19 +78,22 @@ final class Photos {
     // MARK: - The imported photos
 
     private static long listedStamp = -1;
+    private static String listedSource = "";
     private static List<File> listed = new ArrayList<>();
 
     /** The imported photos, in the order they came (one stat of the folder while nothing changed). */
     static synchronized List<File> files(Context c) {
         File d = dir(c);
         long stamp = d.exists() ? d.lastModified() : 0;
-        if (stamp != listedStamp) {
+        ImmichSource source = ImmichPhotos.source();
+        if (stamp != listedStamp || !source.key.equals(listedSource)) {
             List<File> out = new ArrayList<>();
             File[] all = d.listFiles();
-            if (all != null) for (File f : all) if (f.getName().endsWith(".jpg")) out.add(f);
+            if (all != null) for (File f : all) if (f.getName().endsWith(".jpg") && source.visible(f)) out.add(f);
             Collections.sort(out);
             listed = out;
             listedStamp = stamp;
+            listedSource = source.key;
         }
         return listed;
     }
@@ -224,6 +227,7 @@ final class Photos {
         // (or two within the same second) may not move.
         File[] imported = d.listFiles((dir, name) -> name.endsWith(".jpg"));
         int have = imported == null ? 0 : imported.length, count = 0;
+        boolean manual = false;
         for (File sent : all) {
             if (!sent.isFile()) continue;
             String name = sent.getName();
@@ -244,7 +248,7 @@ final class Photos {
             // Named by import time (the order they came is the order the screensaver shows them) and by process (the
             // other one may import in the same millisecond); written as .part first, so a crash leaves no half photo.
             File out = new File(d, String.format(Locale.US, "%013d-%d%s", System.currentTimeMillis() + count,
-                    android.os.Process.myPid(), original.startsWith(IMMICH) ? IMMICH_END : ".jpg"));
+                    android.os.Process.myPid(), ImmichSource.importedSuffix(original)));
             File part = new File(d, out.getName() + ".part");
             try {
                 Bitmap b = decode(src, W, H);
@@ -258,6 +262,7 @@ final class Photos {
                     setTakenAt(part, takenAt(src));
                     if (!part.renameTo(out)) throw new IOException("can't name " + out.getName());
                     count++;
+                    if (!original.startsWith(IMMICH)) manual = true;
                 }
             } catch (IOException | RuntimeException | OutOfMemoryError e) {
                 part.delete();
@@ -266,15 +271,18 @@ final class Photos {
             src.delete();
         }
         AppLog.w("photos: imported " + count + ", " + (have + count) + " in all");
-        if (count > 0) Prefs.setPhotos(true);   // new photos show, even if they had been turned off
+        if (count > 0) {
+            synchronized (Photos.class) { listedStamp = -1; }
+            if (manual) Prefs.setPhotos(true);   // an old Immich sync must not undo a newer source/off choice
+        }
         return count;
     }
 
     // MARK: - Immich's (ImmichPhotos)
 
     /** What ImmichPhotos leaves in the private inbox starts with this; imported, its name ends with IMMICH_END. */
-    static final String IMMICH = "immich-";
-    private static final String IMMICH_END = "-immich.jpg";
+    static final String IMMICH = ImmichSource.INBOX_PREFIX;
+    private static final String IMMICH_END = ImmichSource.PHOTO_END;
 
     /** Imports what's waiting now, on the caller's thread (ImmichPhotos, between two downloads). */
     static int importWaiting(Context c) {
@@ -293,22 +301,6 @@ final class Photos {
         List<File> out = new ArrayList<>(all == null ? Collections.<File>emptyList() : Arrays.asList(all));
         Collections.sort(out);
         return out;
-    }
-
-    /** When it was imported (its name starts with that time), or 0. */
-    static long importedAt(File f) {
-        try {
-            return Long.parseLong(f.getName().substring(0, 13));
-        } catch (RuntimeException e) {
-            return 0;
-        }
-    }
-
-    /** Takes Immich's away (and what of it still waits), keeping tools/photos.py's. */
-    static void removeImmich(Context c) {
-        for (File f : fromImmich(c)) f.delete();
-        File[] waiting = privateInbox(c).listFiles((d, name) -> name.contains(IMMICH));
-        if (waiting != null) for (File f : waiting) f.delete();
     }
 
     /** Deletes the imported photos and whatever is still waiting, half-sent ones included. */

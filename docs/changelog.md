@@ -8,6 +8,10 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
   opnamedatums, zachte overgangen en klok en weer rechtsonder.
 - Gebruikt de bestaande Immich-bron (alle foto's of één album), ook naast AIO. Nieuwe imports bewaren de volledige
   fotoverhouding en opnamedatum, zonder GPS-tags. De keuze voor de indeling is per profiel.
+- Albumwissels gebruiken aparte fotocaches en verversingstijden. Foto's uit een vorige selectie blijven niet meer
+  zichtbaar, ook niet als het nieuwe album leeg is of een eerdere download nog loopt.
+- Een gekozen fotoalbum krijgt ook bij schermvullende weergave voorrang op AIO-afbeeldingen; een leeg of nog ladend
+  album valt terug op de klok.
 
 ## 1.3.5
 

@@ -98,6 +98,11 @@ De bestaande Immich-koppeling kan alle foto's of één album gebruiken:
 
 De tv bewaart verkleinde kopieën en haalt iedere zes uur nieuwe foto's op. De laatst opgehaalde foto's
 blijven zonder verbinding beschikbaar. Alleen de opnamedatum blijft in de kopieën; GPS-gegevens worden verwijderd.
+Na een albumwissel verdwijnen foto's uit de vorige selectie meteen uit beeld. Elke selectie heeft een eigen cache;
+een leeg of onbereikbaar album toont geen foto's uit andere albums. Handmatig gestuurde foto's blijven bewaard,
+maar verschijnen niet zolang een specifiek Immich-album is gekozen.
+De albumkeuze geldt ook bij schermvullende weergave en krijgt voorrang op AIO-afbeeldingen. Zolang het album nog
+geen beschikbare foto's heeft, verschijnt de klok in plaats van andere foto's of filmbeelden.
 Bestaande, eerder bijgesneden kopieën krijgen hun volledige verhouding wanneer ze opnieuw uit Immich zijn opgehaald.
 Foto's kunnen ook handmatig worden gestuurd met `python3 tools/photos.py <TV-IP> <foto-of-map>`.
 
