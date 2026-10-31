@@ -184,35 +184,46 @@ final class Aio {
     }
 
     /**
-     * The picture for one card shape. A Jellyfin title is asked at that shape's size. A TMDB address is rewritten to
-     * it. The manager's small art link gets the same size on the query, so every TV asks for the same file.
+     * The picture for one card shape. The row's own address comes first (TMDB or the manager's art link, both
+     * https). Only when that is empty do we ask the manager for Jellyfin art, so every TV can load it: plain
+     * Jellyfin is often http, which the release APK does not allow.
      */
     private static String sizedImage(String raw, String itemId, boolean wide) {
-        String direct = jellyfinImage(itemId, wide ? "Backdrop" : "Primary", wide ? "maxWidth=1280" : "maxHeight=780");
-        if (!direct.isEmpty()) return direct;
-        if (raw == null) return "";
-        String url = raw.trim();
-        if (url.isEmpty()) return "";
+        String url = raw == null ? "" : raw.trim();
+        if (url.isEmpty()) return artUrl(itemId, wide);
         if (url.startsWith("/")) url = Prefs.aioUrl() + url;
-        if (url.contains("/api/homepage/art")) {
-            int q = url.indexOf('?');
-            String base = q >= 0 ? url.substring(0, q) : url;
-            String query = q >= 0 ? url.substring(q + 1) : "";
-            StringBuilder kept = new StringBuilder();
-            for (String part : query.split("&")) {
-                if (part.isEmpty() || part.startsWith("image=") || part.startsWith("fillWidth=")
-                        || part.startsWith("fillHeight=")) continue;
-                if (kept.length() > 0) kept.append('&');
-                kept.append(part);
-            }
-            if (kept.length() > 0) kept.append('&');
-            kept.append("image=").append(wide ? "Backdrop" : "Primary");
-            kept.append(wide ? "&fillWidth=1280&fillHeight=720" : "&fillWidth=780&fillHeight=1170");
-            return base + "?" + kept;
-        }
+        if (url.contains("/api/homepage/art")) return artQuery(url, wide);
         String size = wide ? "/w1280/" : "/w780/";
         return url.replace("/w92/", size).replace("/w154/", size).replace("/w185/", size)
                 .replace("/w342/", size).replace("/w500/", size).replace("/w780/", size).replace("/original/", size);
+    }
+
+    /** Manager art over https, else Jellyfin on the LAN when that is all there is. */
+    private static String artUrl(String itemId, boolean wide) {
+        if (itemId == null || itemId.isEmpty()) return "";
+        if (!Prefs.aioUrl().isEmpty()) {
+            return Prefs.aioUrl() + "/api/homepage/art?source=jellyfin&item_id=" + itemId
+                    + (wide ? "&image=Backdrop&fillWidth=1280&fillHeight=720"
+                            : "&image=Primary&fillWidth=780&fillHeight=1170");
+        }
+        return jellyfinImage(itemId, wide ? "Backdrop" : "Primary", wide ? "maxWidth=1280" : "maxHeight=780");
+    }
+
+    private static String artQuery(String url, boolean wide) {
+        int q = url.indexOf('?');
+        String base = q >= 0 ? url.substring(0, q) : url;
+        String query = q >= 0 ? url.substring(q + 1) : "";
+        StringBuilder kept = new StringBuilder();
+        for (String part : query.split("&")) {
+            if (part.isEmpty() || part.startsWith("image=") || part.startsWith("fillWidth=")
+                    || part.startsWith("fillHeight=")) continue;
+            if (kept.length() > 0) kept.append('&');
+            kept.append(part);
+        }
+        if (kept.length() > 0) kept.append('&');
+        kept.append("image=").append(wide ? "Backdrop" : "Primary");
+        kept.append(wide ? "&fillWidth=1280&fillHeight=720" : "&fillWidth=780&fillHeight=1170");
+        return base + "?" + kept;
     }
 
     private static void readCards(JSONArray rows, List<Recs.Pick> into, boolean recent) {
@@ -447,8 +458,8 @@ final class Aio {
             }
             String imageId = item.optString("SeriesId", "");
             if (!uuid(imageId)) imageId = id;
-            p.posterUrl = jellyfinImage(imageId, "Primary", "maxHeight=780");
-            p.imageUrl = jellyfinImage(imageId, "Backdrop", "maxWidth=1280");
+            p.posterUrl = sizedImage("", imageId, false);
+            p.imageUrl = sizedImage("", imageId, true);
             if (p.imageUrl.isEmpty()) p.imageUrl = p.posterUrl;
             p.backdrop = "aio-c-" + id;
             p.poster = p.backdrop;

@@ -83,7 +83,7 @@ final class Recs {
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 11;   // 11: portrait and landscape are asked at their own size
+    private static final int CACHE_VERSION = 12;   // 12: AIO continue/recent art goes through the manager (https)
     /** TMDB's titles in the list (trending, then the new releases), as on main. */
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
@@ -1240,9 +1240,11 @@ final class Recs {
                 BitmapFactory.Options bounds = new BitmapFactory.Options();
                 bounds.inJustDecodeBounds = true;
                 BitmapFactory.decodeFile(f.getPath(), bounds);
-                if (bounds.outWidth > 0 && bounds.outHeight > bounds.outWidth) {
+                // Only the manager's tiny poster (before each shape had its size): a full portrait stays as the
+                // wide card's crop when the landscape file is missing, so the card is never empty.
+                if (bounds.outWidth > 0 && bounds.outHeight > bounds.outWidth && bounds.outHeight < 500) {
                     //noinspection ResultOfMethodCallIgnored
-                    f.delete();   // a portrait was saved when the landscape download was blocked
+                    f.delete();
                 }
             }
             if (!f.exists()) fetchWide(f, p);

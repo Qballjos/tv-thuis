@@ -640,27 +640,37 @@ var Data = (function () {
     }, false);
   }
 
+  function artUrl(itemId, wide) {
+    if (!itemId) return '';
+    if (aioBase()) {
+      return aioBase() + '/api/homepage/art?source=jellyfin&item_id=' + itemId
+        + (wide ? '&image=Backdrop&fillWidth=1280&fillHeight=720' : '&image=Primary&fillWidth=780&fillHeight=1170');
+    }
+    return jellyfinImage(itemId, wide ? 'Backdrop' : 'Primary', wide ? 'maxWidth=1280' : 'maxHeight=780');
+  }
+
+  function artQuery(url, wide) {
+    var q = url.indexOf('?');
+    var base = q >= 0 ? url.slice(0, q) : url;
+    var query = q >= 0 ? url.slice(q + 1) : '';
+    var parts = query ? query.split('&') : [];
+    var kept = [];
+    for (var i = 0; i < parts.length; i++) {
+      if (!parts[i] || parts[i].indexOf('image=') === 0 || parts[i].indexOf('fillWidth=') === 0 || parts[i].indexOf('fillHeight=') === 0) continue;
+      kept.push(parts[i]);
+    }
+    kept.push('image=' + (wide ? 'Backdrop' : 'Primary'));
+    kept.push(wide ? 'fillWidth=1280' : 'fillWidth=780');
+    kept.push(wide ? 'fillHeight=720' : 'fillHeight=1170');
+    return base + '?' + kept.join('&');
+  }
+
+  /** Row art first (https); only invent Jellyfin art through the manager so plain http Jellyfin is not required. */
   function sizedImage(raw, itemId, wide) {
-    var direct = jellyfinImage(itemId, wide ? 'Backdrop' : 'Primary', wide ? 'maxWidth=1280' : 'maxHeight=780');
-    if (direct) return direct;
-    if (!raw) return '';
+    if (!raw) return artUrl(itemId, wide);
     var url = raw;
     if (url.charAt(0) === '/') url = aioBase() + url;
-    if (url.indexOf('/api/homepage/art') >= 0) {
-      var q = url.indexOf('?');
-      var base = q >= 0 ? url.slice(0, q) : url;
-      var query = q >= 0 ? url.slice(q + 1) : '';
-      var parts = query ? query.split('&') : [];
-      var kept = [];
-      for (var i = 0; i < parts.length; i++) {
-        if (!parts[i] || parts[i].indexOf('image=') === 0 || parts[i].indexOf('fillWidth=') === 0 || parts[i].indexOf('fillHeight=') === 0) continue;
-        kept.push(parts[i]);
-      }
-      kept.push('image=' + (wide ? 'Backdrop' : 'Primary'));
-      kept.push(wide ? 'fillWidth=1280' : 'fillWidth=780');
-      kept.push(wide ? 'fillHeight=720' : 'fillHeight=1170');
-      return base + '?' + kept.join('&');
-    }
+    if (url.indexOf('/api/homepage/art') >= 0) return artQuery(url, wide);
     var size = wide ? '/w1280/' : '/w780/';
     return url.replace('/w92/', size).replace('/w154/', size).replace('/w185/', size)
       .replace('/w342/', size).replace('/w500/', size).replace('/w780/', size).replace('/original/', size);
@@ -755,8 +765,8 @@ var Data = (function () {
       meta = !name || name === title ? code : code + ' · ' + name;
     } else if (item.ProductionYear) meta = String(item.ProductionYear);
     var imageId = isUuid(item.SeriesId) ? item.SeriesId : id;
-    var portrait = jellyfinImage(imageId, 'Primary', 'maxHeight=780');
-    var landscape = jellyfinImage(imageId, 'Backdrop', 'maxWidth=1280');
+    var portrait = sizedImage('', imageId, false);
+    var landscape = sizedImage('', imageId, true);
     return {
       aio: true, resume: true, recent: false, kind: kind, id: n + 1, itemId: id,
       title: title, meta: meta, poster: portrait || landscape, backdrop: landscape || portrait,
