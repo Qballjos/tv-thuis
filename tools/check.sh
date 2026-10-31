@@ -20,6 +20,8 @@ if [ "$what" = all ] || [ "$what" = android ]; then
   bash tools/test-remote.sh
   bash tools/check-profiles.sh
   bash tools/check-watch-next.sh
+  bash tools/check-photo-collage.sh
+  bash tools/check-immich-source.sh
 fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then

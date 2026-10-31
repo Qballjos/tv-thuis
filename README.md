@@ -73,9 +73,38 @@ In **Startscherm → Schermbeveiliging**:
 | Schermbeveiliging | Aan of uit |
 | Start na | 5 min, 10 min, 15 min, 30 min, 1 uur of 2 uur |
 | Aanvraagknop | Welke knop een titel aanvraagt of opent (standaard OK) |
+| Foto-indeling | Schermvullend of Fotocollage |
 | Bekijken | Direct de beveiliging tonen |
 
 Tijdens de beveiliging: **links** / **rechts** voor de vorige of volgende foto; de gekozen aanvraagknop vraagt of opent. Andere knoppen sluiten de beveiliging. Volume blijft van de tv.
+
+**Fotocollage** toont maximaal drie eigen foto's tegelijk, met witte lijsten op een rustige achtergrond,
+zachte overgangen en klok en weer rechtsonder. Staande foto's blijven heel. De opnamedatum staat erbij als
+die beschikbaar is. Deze keuze gebruikt eigen foto's ook wanneer AIO is ingesteld; zonder eigen foto's blijft
+de bestaande schermbeveiliging werken. De indeling wordt per profiel bewaard; de fotocollectie is gedeeld.
+
+### Foto's uit Immich (Android en Google TV)
+
+De bestaande Immich-koppeling kan alle foto's of één album gebruiken:
+
+1. Zet `immich_server=https://photos.example.com` in je lokale, genegeerde `config.properties` en bouw de APK.
+   Gebruik het basisadres van de server, zonder `/photos` of `/api`. HTTP kan alleen op het eigen netwerk.
+2. Maak in Immich onder **Account Settings → API Keys** een sleutel met `asset.read`, `asset.view`,
+   `asset.download` en `album.read`. Houd die privé; hij komt nooit in de APK of repository.
+3. Stuur de sleutel vanuit je eigen terminal met `python3 tools/send_key.py <TV-IP> immich_api_key`.
+   Het script vraagt hem verborgen en controleert de verbinding.
+4. Kies **Startscherm → Mijn foto's** voor alle Immich-foto's of een album, en
+   **Schermbeveiliging → Foto-indeling → Fotocollage** voor de collage.
+
+De tv bewaart verkleinde kopieën en haalt iedere zes uur nieuwe foto's op. De laatst opgehaalde foto's
+blijven zonder verbinding beschikbaar. Alleen de opnamedatum blijft in de kopieën; GPS-gegevens worden verwijderd.
+Na een albumwissel verdwijnen foto's uit de vorige selectie meteen uit beeld. Elke selectie heeft een eigen cache;
+een leeg of onbereikbaar album toont geen foto's uit andere albums. Handmatig gestuurde foto's blijven bewaard,
+maar verschijnen niet zolang een specifiek Immich-album is gekozen.
+De albumkeuze geldt ook bij schermvullende weergave en krijgt voorrang op AIO-afbeeldingen. Zolang het album nog
+geen beschikbare foto's heeft, verschijnt de klok in plaats van andere foto's of filmbeelden.
+Bestaande, eerder bijgesneden kopieën krijgen hun volledige verhouding wanneer ze opnieuw uit Immich zijn opgehaald.
+Foto's kunnen ook handmatig worden gestuurd met `python3 tools/photos.py <TV-IP> <foto-of-map>`.
 
 ## Updates op de Android-tv’s
 

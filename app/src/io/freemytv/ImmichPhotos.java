@@ -25,8 +25,8 @@ import java.util.concurrent.Executors;
  * My Photos from an Immich server (immich_server in config.properties, its key sent to each TV by tools/send_key.py
  * into Secrets, never in the APK): every 6 hours, a random choice of its photos goes through the same import as the
  * ones a computer sends, one at a time, so at most one original is on disk at once. Nothing goes before something new
- * has come: at Photos.MAX the oldest of Immich's make room, and after a change of source the previous source's photos
- * go one for each new one. Photos sent with tools/photos.py are never touched. A TV without the key shows My Photos
+ * has come: at Photos.MAX the oldest of Immich's make room. Each source has its own cache tag and refresh stamp;
+ * switching albums hides the previous selection immediately. Photos sent with tools/photos.py are never touched. A TV without the key shows My Photos
  * as before, even in a build with a server set: the key sent by hand is what says this TV shows Immich.
  */
 final class ImmichPhotos {
@@ -48,6 +48,16 @@ final class ImmichPhotos {
 
     private static volatile String key = "";
     private static volatile long checkedAt = -1;
+    private static volatile ImmichSource selected;
+
+    static ImmichSource source() {
+        String mode = Prefs.photoSource(), album = Prefs.photoAlbum();
+        ImmichSource value = selected;
+        if (value == null || !value.matches(mode, album)) {
+            selected = value = new ImmichSource(Config.IMMICH_SERVER, mode, album);
+        }
+        return value;
+    }
 
     /** A server in config.properties and its key sent to this TV, read again every 30 s at most (Settings asks every frame). */
     static boolean configured(Context c) {
@@ -94,40 +104,29 @@ final class ImmichPhotos {
     }
 
     /**
-     * My Photos' source changed (Home Settings): a new choice comes at the next home screen, and Immich's photos from
-     * before go as it comes. Default (none of yours) takes Immich's away now; tools/photos.py's always stay.
+     * The display switches cache tags immediately; ask for a fresh selection at the next home screen or preview.
+     * Existing copies stay on disk until room is needed, so a failed fetch never destroys the previous selection.
      */
     static void sourceChanged(Context c) {
-        Context app = c.getApplicationContext();
-        //noinspection ResultOfMethodCallIgnored
-        new File(app.getFilesDir(), "immich-sync").delete();
-        boolean mine = !"default".equals(Prefs.photoSource());
-        long at = System.currentTimeMillis();
-        // On the worker, after a sync under way: what that one brings is the previous source's too
-        WORKER.execute(() -> {
-            if (mine) touch(changed(app), at);
-            else Photos.removeImmich(app);
-        });
-        Prefs.setPhotos(mine);
-    }
-
-    /** Its time is when the source last changed (absent: no previous source's photos to replace). */
-    private static File changed(Context app) {
-        return new File(app.getFilesDir(), "immich-source");
+        source().stamp(c.getFilesDir()).delete();
+        Prefs.setPhotos(source().enabled);
     }
 
     /** Starts a sync in the background when one is due (and My Photos is on); `ready` runs on the main thread after. */
     static void syncIfDue(Context c, Runnable ready) {
         if (!configured(c) || !Prefs.photos() || "default".equals(Prefs.photoSource()) || running) return;
+        ImmichSource selection = source();
+        if (!selection.enabled) return;   // a missing album ID must never become an unrestricted search
         Context app = c.getApplicationContext();
-        File stamp = new File(app.getFilesDir(), "immich-sync");
+        File stamp = selection.stamp(app.getFilesDir());
         if (Math.abs(System.currentTimeMillis() - stamp.lastModified()) < EVERY_MS) return;   // 0 when never
         running = true;
         WORKER.execute(() -> {
             int n = 0;
             try {
-                n = sync(app);
-                AppLog.w("immich: " + n + " photos, " + Photos.files(app).size() + " in all");
+                n = sync(app, selection);
+                AppLog.w("immich: " + n + " photos from " + ("album".equals(selection.mode) ? "album " + selection.album : "all")
+                        + ", " + Photos.files(app).size() + " visible");
             } catch (Exception e) {
                 AppLog.w("immich: " + e.getMessage());
             } finally {
@@ -135,27 +134,26 @@ final class ImmichPhotos {
                 running = false;
             }
             if (n > 0 && ready != null) MAIN.post(ready);
+            if (!selection.key.equals(source().key)) MAIN.post(() -> syncIfDue(app, ready));
         });
     }
 
-    private static int sync(Context app) throws Exception {
+    private static int sync(Context app, ImmichSource selection) throws Exception {
         JSONObject query = new JSONObject().put("size", COUNT * 2).put("type", "IMAGE").put("withExif", true);
-        if ("album".equals(Prefs.photoSource()) && !Prefs.photoAlbum().isEmpty()) {
-            query.put("albumIds", new JSONArray().put(Prefs.photoAlbum()));
+        if ("album".equals(selection.mode)) {
+            query.put("albumIds", new JSONArray().put(selection.album));
         }
         JSONArray found = new JSONArray(request("/api/search/random", query.toString()));
         File inbox = Photos.privateInbox(app);
         if (!inbox.isDirectory() && !inbox.mkdirs()) throw new IOException("can't create " + inbox);
-        // The previous source's photos, oldest first: one goes for each new one, the rest once new ones came
-        File changed = changed(app);
+        // Replace this source's previous batch only after its new batch has arrived.
         List<File> previous = new ArrayList<>();
-        if (changed.exists()) {
-            for (File f : Photos.fromImmich(app)) if (Photos.importedAt(f) < changed.lastModified()) previous.add(f);
-        }
+        for (File f : Photos.fromImmich(app)) if (selection.visible(f)) previous.add(f);
         // Low-memory and 720p TVs take Immich's preview (about 1440 px) rather than decode a 24 MP original
         boolean small = Backdrop.W <= 1280 || HomeApps.lowRam(app);
         int got = 0;
         for (int i = 0; i < found.length() && got < COUNT; i++) {
+            if (!selection.key.equals(source().key) || !Prefs.photos()) break;
             JSONObject a = found.getJSONObject(i);
             String id = a.optString("id");
             if (!"IMAGE".equals(a.optString("type")) || !id.matches("[0-9a-fA-F-]{8,64}")) continue;
@@ -166,17 +164,20 @@ final class ImmichPhotos {
             }
             long size = exif == null ? 0 : exif.optLong("fileSizeInByte");
             boolean original = !small && "image/jpeg".equals(a.optString("originalMimeType")) && size < MAX_ORIGINAL;
-            File part = new File(inbox, "." + Photos.IMMICH + id), done = new File(inbox, Photos.IMMICH + id + ".jpg");
+            File part = new File(inbox, "." + selection.inboxName(id)), done = new File(inbox, selection.inboxName(id));
             // All 100 are tools/photos.py's, so nothing could make room: stop before a download that would be thrown
             // away (and, with nothing imported, made again every 30 minutes)
             if (Photos.count(app) >= Photos.MAX && Photos.fromImmich(app).isEmpty()) break;
             try {
                 download("/api/assets/" + id + (original ? "/original" : "/thumbnail?size=preview"), part);
+                if (!selection.key.equals(source().key) || !Prefs.photos()) break;
+                Photos.setTakenAt(part, exif == null ? a.optString("localDateTime")
+                        : exif.optString("dateTimeOriginal", a.optString("localDateTime")));
                 // Room only now that the new one is here: a download that fails takes nothing away
                 boolean full = Photos.count(app) >= Photos.MAX;
                 if (full && !makeRoom(app, previous)) break;   // all of them are tools/photos.py's
                 if (!part.renameTo(done)) continue;
-                // Right away: the next original doesn't wait beside this one. One of the previous source's goes for
+                // Right away: the next original doesn't wait beside this one. One of this source's old copies goes for
                 // each new one (already done when it made room).
                 if (Photos.importWaiting(app) > 0) {
                     got++;
@@ -190,7 +191,6 @@ final class ImmichPhotos {
         }
         if (got > 0) {
             for (File f : previous) f.delete();
-            changed.delete();
         }
         return got;
     }

@@ -333,12 +333,18 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   (`app/assets/zones.json`, written by `tools/make_zones.py` with `web/zones.js`).
   What the person changes on the TV (`Prefs`: Home Settings, Shelf, Remote Buttons, Sleep Timer) wins over those first values.
 - `ImmichPhotos` (with `immich_server` and the key sent to that TV; without the key My Photos is unchanged): every 6
-  hours, on the home screen's resume, a random choice from the server (`POST /api/search/random`, or one album,
+  hours, on the home screen's resume or while the screensaver is showing, a random choice from the server (`POST /api/search/random`, or one album,
   `Prefs.photoSource`) is downloaded one photo at a time into `Photos.privateInbox` and imported right away, so at most
   one original is on disk (Immich's preview instead on low-RAM and 720p TVs). Nothing goes before something new came:
-  at `Photos.MAX` the oldest of Immich's make room (`-immich.jpg` names), a new source's photos replace the previous
-  one's as they arrive, and `tools/photos.py`'s are never touched. Redirects are never followed (`x-api-key` would go
+  at `Photos.MAX` the oldest of Immich's make room (`-immich.jpg` names). `ImmichSource` snapshots the server/album for
+  the query, photo filename tag and refresh stamp. `Photos.files` exposes only that selection (manual photos only
+  outside album mode); untagged legacy caches stay hidden. A stale sync cannot mark a new album fresh or re-enable
+  photos. `tools/photos.py`'s are never deleted. Redirects are never followed (`x-api-key` would go
   along to another host).
+- Screensaver's `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
+  An empty/loading selected album uses the clock fallback, never other photos or movie art.
+  `PhotoCollage` prepares up to three framed photos on the worker; the existing slideshow handles fades and keys.
+  Imports retain the full aspect ratio and capture date only (no GPS); older cropped copies still work.
 - Plain HTTP only to the user's own network: `build.sh` reads every server setting with `lan_server <key>` (now
   `immich_server`), which refuses an `http://` address that isn't private (10/8, 172.16/12, 192.168/16, `.local`,
   `.lan`, `.home.arpa`, a one-word name) and lists its host in the generated `network_security_config.xml`, the one
