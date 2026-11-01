@@ -2,6 +2,20 @@
 
 Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-thuis)) bovenop Free My TV toevoegt of veranderde. De Android-tv’s installeren een nieuwe versie via **Startscherm → Updates**. De LG krijgt die APK niet; daar blijft een aparte webOS-installatie nodig.
 
+## 1.3.7
+
+- **Pas toegevoegd** staat op toevoegdatum, nieuwste eerst, zonder wisselende uurvolgorde of verborgen vervolgdelen.
+- **Trending** krijgt normale hoofdletters, verbeterde brede afbeeldingen en terugval naar posters bij ontbrekende
+  of onleesbare afbeeldingen. Oude afbeeldingscaches worden vernieuwd.
+- **Verder kijken** ververst elke minuut via AIO, ook zonder Jellyfin-sleutel op de tv. Wholphin kan via de bestaande
+  AIO-koppeling worden aangevuld wanneer Android nog geen Verder kijken-items aanbiedt.
+- Het ronde profiellogo blijft zichtbaar, onafhankelijk van de achtergrondtransparantie. Zes ingetogen
+  profielafbeeldingen toegevoegd: twee portretten, maan, bergen, blad en ringen.
+- **Schermbeveiliging → Bron schermbeveiliging**: Automatisch, AIO of Immich, per profiel. Een expliciet gekozen
+  lege bron toont de klok; Immich-collages gebruiken alleen de gekozen verzameling.
+- Upstream-verbeteringen samengevoegd, waaronder bovenste knoppen herschikken, een appwinkelknop, Watchmode-sleutel
+  via QR, een animatiefilter, gedrag na volledig opstarten en de juiste resolutie voor LG HD-/Full HD-tv's.
+
 ## 1.3.6
 
 - AIO-tabs: **Films** en **Series** tonen de eigen bibliotheek met doorladen tijdens het bladeren; **Trending**
