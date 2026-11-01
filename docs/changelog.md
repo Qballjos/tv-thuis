@@ -2,25 +2,16 @@
 
 Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-thuis)) bovenop Free My TV toevoegt of veranderde. De Android-tv’s installeren een nieuwe versie via **Startscherm → Updates**. De LG krijgt die APK niet; daar blijft een aparte webOS-installatie nodig.
 
-## Nog niet uitgebracht
+## 1.3.6
 
-- De AIO-startschermweergave heeft aparte tabbladen **Films** en **Series** voor de eigen bibliotheek, met doorladen
-  tijdens het bladeren. **Trending** bundelt de aanbevelingen die je kunt aanvragen. Verder kijken bevat alleen
-  begonnen titels; afzonderlijke films uit dezelfde franchise blijven in de bibliotheek zichtbaar.
-- De onbedoelde wijziging aan de schermbeveiliging is teruggedraaid; ‘Voor jou’ blijft vooralsnog de streamingtips tonen.
-
-- **Koppelen met AIO** via QR en een eenmalige koppellink uit het AIO-dashboard. De tv neemt het serveradres over
-  en bewaart een eigen intrekbaar token; AIO-wachtwoorden en Jellyfin-sleutels hoeven niet meer op de tv.
-- Verder kijken kan via de gekoppelde AIO-server; handmatig instellen blijft beschikbaar voor oudere AIO-versies.
-
-- **Fotocollage** als extra schermbeveiliging op Android / Google TV: maximaal drie eigen foto's met witte lijsten,
-  opnamedatums, zachte overgangen en klok en weer rechtsonder.
-- Gebruikt de bestaande Immich-bron (alle foto's of één album), ook naast AIO. Nieuwe imports bewaren de volledige
-  fotoverhouding en opnamedatum, zonder GPS-tags. De keuze voor de indeling is per profiel.
-- Albumwissels gebruiken aparte fotocaches en verversingstijden. Foto's uit een vorige selectie blijven niet meer
-  zichtbaar, ook niet als het nieuwe album leeg is of een eerdere download nog loopt.
-- Een gekozen fotoalbum krijgt ook bij schermvullende weergave voorrang op AIO-afbeeldingen; een leeg of nog ladend
-  album valt terug op de klok.
+- AIO-tabs: **Films** en **Series** tonen de eigen bibliotheek met doorladen tijdens het bladeren; **Trending**
+  bundelt Seerr-aanbevelingen die je kunt aanvragen. **Verder kijken** bevat alleen begonnen titels.
+- Pas toegevoegde titels kunnen ook in de AIO-schermbeveiliging meedraaien.
+- **Koppelen met AIO** via QR en een eenmalige koppellink uit het AIO-dashboard. De tv bewaart een eigen
+  intrekbaar token; AIO-wachtwoord en Jellyfin-sleutel hoeven niet meer op de tv. Handmatig instellen blijft
+  beschikbaar voor oudere AIO-versies.
+- **Fotocollage** als schermbeveiliging: tot drie eigen foto’s (Immich of handmatig), witte lijsten, opnamedatum,
+  klok en weer. Indeling per profiel; Immich-albums krijgen voorrang op AIO-beelden en houden aparte caches.
 
 ## 1.3.5
 

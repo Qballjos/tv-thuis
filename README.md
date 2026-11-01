@@ -12,10 +12,11 @@ TV Thuis gebruikt de functies van [AIO Media Server Manager](https://github.com/
 
 | Functie | Wat de tv doet |
 | --- | --- |
-| Verder kijken | In progress / next-up uit Jellyfin |
+| Koppelen | QR + eenmalige koppellink; geen wachtwoord of Jellyfin-sleutel op de tv |
+| Verder kijken | In progress / next-up (via AIO of Jellyfin) |
 | Pas toegevoegd | Nieuw in de bibliotheek (Jellyfin / Plex via de manager) |
-| Films / Series | Trending van deze week via Seerr |
-| Aanvragen | Ontbrekende titels aanvragen vanaf de tv |
+| Films / Series | Eigen bibliotheek, pagina’s laden tijdens het bladeren |
+| Trending | Seerr-aanbevelingen; ontbrekende titels aanvragen |
 | Zoeken | Zoeken en aanvragen in Startscherm → AIO Media |
 | Plaatjes | Poster en backdrop via de manager (https) |
 
