@@ -28,6 +28,9 @@
          returns null). The shelf and streaming apps, the live TV apps and, through the <intent>, every TV app
          (for "All Apps"). -->
     <queries>
+        <!-- Optional App Store top button: Google Play or Amazon Appstore. -->
+        <package android:name="com.android.vending" />
+        <package android:name="com.amazon.venezia" />
         <package android:name="com.netflix.ninja" />
         <package android:name="com.google.android.youtube.tv" />
         <package android:name="com.amazon.firetv.youtube" />

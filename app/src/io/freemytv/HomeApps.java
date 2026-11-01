@@ -290,11 +290,11 @@ final class HomeApps {
 
     // MARK: - Top buttons (the round ones at the top right)
 
-    static final String TOP_LIVE = "live", TOP_INPUTS = "inputs", TOP_SETTINGS = "settings", TOP_RECENTS = "recents";
+    static final String TOP_LIVE = "live", TOP_INPUTS = "inputs", TOP_SETTINGS = "settings", TOP_RECENTS = "recents", TOP_STORE = "store";
     static final List<String> TOP_DEFAULT = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS));
-    /** What can be a top button: the default three, and Recent Apps for whoever adds it. */
-    static final List<String> TOP_ALL = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS, TOP_RECENTS));
-    static final int MAX_TOP = TOP_ALL.size() + 1;   // the profile button is always available
+    /** What can be a top button: the default three, and Recent Apps and App Store for whoever adds them. */
+    static final List<String> TOP_ALL = Collections.unmodifiableList(java.util.Arrays.asList(TOP_LIVE, TOP_INPUTS, TOP_SETTINGS, TOP_RECENTS, TOP_STORE));
+    static final int MAX_TOP = TOP_ALL.size() + 1;   // the profile button stays at the end
 
     /** The keys of the top buttons, in order (Settings > Top Buttons; by default Live TV, HDMI Inputs, Settings). */
     static List<String> topButtonKeys() {
@@ -308,12 +308,28 @@ final class HomeApps {
         return keys;
     }
 
-    /** The chosen top buttons, followed by the profile button. */
-    static List<Item> topButtons() {
+    /** The top buttons, ready to draw. A null context skips the store until the background app load checks it. */
+    static List<Item> topButtons(Context c) {
         List<Item> items = new ArrayList<>();
-        for (String key : topButtonKeys()) items.add(topButton(key));
+        for (String key : topButtonKeys()) {
+            Item item = topButton(key);
+            if (TOP_STORE.equals(key)) {
+                item.pkg = c == null ? null : storePackage(c);
+                if (item.pkg == null) continue;   // keep the saved choice, but no dead button on the home screen
+            }
+            items.add(item);
+        }
         items.add(action(PROFILES, "profiles", Ui.trf("Profiles: {name}", "name", Prefs.profiles().name()), "person"));
         return items;
+    }
+
+    /** Only native stores with a launcher entry; no browser fallback or package installation. */
+    static String storePackage(Context c) {
+        PackageManager pm = c.getPackageManager();
+        String first = HomeMode.AMAZON ? "com.amazon.venezia" : "com.android.vending";
+        String second = HomeMode.AMAZON ? "com.android.vending" : "com.amazon.venezia";
+        if (launchIntent(pm, first) != null) return first;
+        return launchIntent(pm, second) != null ? second : null;
     }
 
     private static Item topButton(String key) {
@@ -321,6 +337,7 @@ final class HomeApps {
             case TOP_LIVE: return action(LIVE_TV, TOP_LIVE, Ui.tr("light|Live TV"), "live_tv");
             case TOP_INPUTS: return action(INPUTS, TOP_INPUTS, Ui.tr("HDMI Inputs"), "hdmi");
             case TOP_RECENTS: return action(RECENTS, TOP_RECENTS, Ui.tr("Recent Apps"), "recents");
+            case TOP_STORE: return action(APP, TOP_STORE, Ui.tr("App Store"), "store");
             default: return action(SETTINGS, TOP_SETTINGS, Ui.tr("light|Settings"), "settings");
         }
     }

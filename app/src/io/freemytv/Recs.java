@@ -77,7 +77,7 @@ final class Recs {
     /** The backdrops: on a 720p UI, TMDB's 1280-wide copy shows the same and is lighter to download and decode. */
     private static final String IMAGES = "https://image.tmdb.org/t/p/" + (Backdrop.W <= 1280 ? "w1280" : "original");
     private static final String POSTERS = "https://image.tmdb.org/t/p/w500";
-    /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with hide_animation=true. */
+    /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with Picks > Cartoons and anime off. */
     private static final int ANIMATION = 16;
     private static final long LIST_EVERY = 6 * 3600_000L;
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
@@ -223,6 +223,7 @@ final class Recs {
     private Recs(Context c) {
         context = c;
         cache = c.getSharedPreferences("recs", Context.MODE_PRIVATE);
+        byName = readByName(c);
         if (cache.getInt("version", 0) != CACHE_VERSION) cache.edit().clear().putInt("version", CACHE_VERSION).apply();
         try {
             String saved = cache.getString("picks", null);
@@ -279,6 +280,20 @@ final class Recs {
         return cachedKey;
     }
 
+    private static volatile String cachedWatchmodeKey = "";
+    private static volatile int watchmodeKeyVersion = -1;
+
+    /** The Watchmode key given on the TV, else the one built in from config.properties. Asked while drawing, as key(). */
+    static String watchmodeKey() {
+        int version = Prefs.version;
+        if (version != watchmodeKeyVersion) {
+            String given = Prefs.watchmodeKey();
+            cachedWatchmodeKey = given.isEmpty() ? Config.WATCHMODE_KEY.trim() : given;
+            watchmodeKeyVersion = version;
+        }
+        return cachedWatchmodeKey;
+    }
+
     /**
      * A key as pasted (spaces, line breaks taken out), or "" when it can't be one: an API key (32 hex digits) or an API
      * Read Access Token (a JWT, "eyJ…").
@@ -300,6 +315,18 @@ final class Recs {
             return Ui.trf("Couldn't reach TMDB: {error}", "error", e.getMessage());
         } catch (RuntimeException e) {   // never out of KeyPage's thread (the watchdog counts it); the name only: no header value
             return Ui.trf("Couldn't reach TMDB: {error}", "error", e.getClass().getSimpleName());
+        }
+    }
+
+    /** Asks Watchmode whether a key works, before it's saved: null if it does, else why not. The key is in the URL: only our own message or the error's name. */
+    static String checkWatchmodeKey(String key) {
+        try {
+            watchmode("/status/", key);
+            return null;
+        } catch (IOException | RuntimeException e) {
+            String message = String.valueOf(e.getMessage());
+            if ("Watchmode returned HTTP 401".equals(message)) return Ui.tr("Watchmode refused this key.");
+            return Ui.trf("Couldn't reach Watchmode: {error}", "error", message.startsWith("Watchmode returned") ? message : e.getClass().getSimpleName());
         }
     }
 
@@ -500,7 +527,97 @@ final class Recs {
     /** Name of the service the pick is on ("Netflix"), or what OK does with a media-manager title. */
     static String serviceName(Pick p) {
         if (p != null && p.aio) return p.canRequest ? Ui.tr("Request") : Ui.tr("Library");
-        return p == null || p.app == null ? "" : SERVICE_NAME.get(p.app);
+        return p == null || p.app == null ? "" : name(p.app);
+    }
+
+    /**
+     * Services SERVICES doesn't know, found by name: a TMDB service in REGION named like a TV app ("Oldflix"). As SERVICES
+     * rows {plain TMDB name, key = package, package, app name}, from the last list (recs-services.json, which the settings
+     * read in another process). They start off in Picks from.
+     */
+    private static volatile List<String[]> byName = new ArrayList<>();
+
+    /** Not by name: Plex's TMDB entry is its free catalogue, not the person's library (#135); YouTube would join on almost every TV. */
+    private static final Set<String> NOT_BY_NAME = new HashSet<>(Arrays.asList("plex", "youtube"));
+
+    /** hasTitles' answers for a day, by provider (only on `io`): a TV without the known services lists again every 10 minutes. */
+    private final Map<Integer, Boolean> titlesKnown = new HashMap<>();
+    private long titlesAt;
+
+    private static String name(String key) {
+        String known = SERVICE_NAME.get(key);
+        if (known != null) return known;
+        for (String[] s : byName) if (s[1].equals(key)) return s[3];
+        return "";
+    }
+
+    /** "Oldflix" and "OLDFLIX", "Claro video" and "Claro Vídeo": compared without case, accents or punctuation, in any script. */
+    static String plain(String name) {
+        String n = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFKD).replaceAll("\\p{M}", "");
+        return n.toLowerCase(Locale.ROOT).replace("+", " plus").replaceAll("[^\\p{L}\\p{N}]+", " ").trim();
+    }
+
+    private static List<String[]> readByName(Context c) {
+        List<String[]> out = new ArrayList<>();
+        try (FileInputStream in = new FileInputStream(new File(c.getFilesDir(), "recs-services.json"))) {
+            JSONArray a = new JSONArray(read(in));
+            for (int i = 0; i < a.length(); i++) {
+                JSONArray s = a.getJSONArray(i);
+                out.add(new String[] {s.getString(0), s.getString(1), s.getString(2), s.getString(3)});
+            }
+        } catch (Exception ignored) {   // none found yet
+        }
+        return out;
+    }
+
+    /** Through a temporary file per process (the screensaver has its own Recs on Android 11 to 12L): the settings read it. */
+    private void writeByName(List<String[]> found) {
+        JSONArray a = new JSONArray();
+        for (String[] s : found) a.put(new JSONArray(Arrays.asList(s)));
+        File tmp = new File(context.getFilesDir(), "recs-services." + android.os.Process.myPid() + ".tmp");
+        try (FileOutputStream out = new FileOutputStream(tmp)) {
+            out.write(a.toString().getBytes(StandardCharsets.UTF_8));
+            out.getFD().sync();
+        } catch (IOException e) {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
+            return;
+        }
+        //noinspection ResultOfMethodCallIgnored
+        tmp.renameTo(new File(context.getFilesDir(), "recs-services.json"));
+    }
+
+    /**
+     * Whether a title's own list has the service by subscription. /discover alone can't say: it matches the service and
+     * the type separately, so a store that only rents a title also comes back when someone else streams it.
+     */
+    private boolean hasTitles(int provider) {
+        long now = System.currentTimeMillis();
+        if (now - titlesAt > 24 * 3600_000L || now < titlesAt) {
+            titlesKnown.clear();
+            titlesAt = now;
+        }
+        Boolean known = titlesKnown.get(provider);
+        if (known != null) return known;
+        try {
+            boolean found = false;
+            for (String kind : new String[] {"movie", "tv"}) {
+                JSONArray titles = get("/discover/" + kind + "?language=" + lang() + "&watch_region=" + REGION + "&with_watch_monetization_types=flatrate"
+                        + "&include_adult=false&sort_by=popularity.desc&with_watch_providers=" + provider).getJSONArray("results");
+                for (int i = 0; i < titles.length() && i < 5 && !found; i++) {
+                    JSONObject br = get("/" + kind + "/" + titles.getJSONObject(i).getInt("id") + "/watch/providers?language=" + lang())
+                            .getJSONObject("results").optJSONObject(REGION);
+                    JSONArray flat = br == null ? null : br.optJSONArray("flatrate");
+                    for (int j = 0; flat != null && j < flat.length(); j++) found |= flat.getJSONObject(j).optInt("provider_id") == provider;
+                }
+                if (found) break;
+            }
+            titlesKnown.put(provider, found);
+            return found;
+        } catch (Exception e) {   // not kept: the next list asks again
+            AppLog.w("recs: titles of service " + provider + ": " + e.getMessage());
+        }
+        return false;
     }
 
     /** The pick's ready backdrop (or null: builds it in the background and notifies when it's ready). */
@@ -753,19 +870,37 @@ final class Recs {
 
     /** TMDB's recommendations for Tips. The caller stores them next to the media manager's titles. */
     private List<Pick> fetchTips(Map<String, Pick> known) throws Exception {
-        // None of the services we know is on the TV (or hide_services hides them all): no region would change that.
+        // Services found by name are also offered, off until enabled.
         boolean any = false;
         for (String[] s : SERVICES) any |= installed(s[2]);
-        if (!any) throw new IOException(NO_KNOWN_APPS);
         // The services the TV has, by their TMDB ids in your region.
         Map<Integer, String[]> services = new HashMap<>();
         JSONArray providers = get("/watch/providers/movie?language=" + lang() + "&watch_region=" + REGION).getJSONArray("results");
+        // The TV's other apps by name: a service SERVICES doesn't know is theirs when the names are the same.
+        Map<String, String[]> apps = new HashMap<>();
+        Set<String> knownPkgs = new HashSet<>();
+        for (String[] s : SERVICES) knownPkgs.add(s[2]);
+        for (String[] app : HomeApps.launchable(context)) {
+            String label = plain(app[1]);
+            if (!label.isEmpty() && !NOT_BY_NAME.contains(label) && !knownPkgs.contains(app[0])) apps.put(label, app);
+        }
+        List<String[]> found = new ArrayList<>();
         for (int i = 0; i < providers.length(); i++) {
             JSONObject o = providers.getJSONObject(i);
-            String[] s = service(o.optString("provider_name"), o.optInt("provider_id"));
-            if (s != null && installed(s[2])) services.put(o.getInt("provider_id"), s);
+            String name = o.optString("provider_name");
+            String[] s = service(name, o.optInt("provider_id"));
+            if (s == null || !SERVICE_NAME.containsKey(s[1])) {
+                String[] app = apps.get(plain(name));
+                // A name that only rents or buys waits until it has titles.
+                s = app != null && hasTitles(o.optInt("provider_id")) ? new String[] {plain(name), app[0], app[0], app[1]} : null;
+                if (s != null) found.add(s);
+            }
+            // serviceOff too: installed() knows only the last list's names, and one found just now starts off.
+            if (s != null && installed(s[2]) && !Prefs.serviceOff(s[1])) services.put(o.getInt("provider_id"), s);
         }
-        if (services.isEmpty()) throw new IOException(NO_APPS);
+        byName = found;
+        writeByName(found);
+        if (services.isEmpty()) throw new IOException(any ? NO_APPS : NO_KNOWN_APPS);
         // Signed in to Trakt: what they're in the middle of comes first, then their watchlist and Trakt's
         // recommendations; what they've watched stays out. Trakt failing leaves the picks as they'd be without it.
         // The list keeps the account it was made with (0: none, and always outside :home), so a list the screensaver's
@@ -788,7 +923,7 @@ final class Recs {
         for (int id : services.keySet()) ids.append(ids.length() == 0 ? "" : "|").append(id);
         String common = "&language=" + lang() + "&watch_region=" + REGION + "&with_watch_monetization_types=flatrate&include_adult=false"
                 + "&sort_by=popularity.desc&with_watch_providers=" + URLEncoder.encode(ids.toString(), "UTF-8")
-                + (Config.HIDE_ANIMATION ? "&without_genres=" + ANIMATION : "");
+                + (Prefs.hideAnimation() ? "&without_genres=" + ANIMATION : "");
         // 1. Trending this week (TMDB goes by what people are watching and searching for right now), only what is
         //    on one of the TV's services: the details say where (and are then ready).
         List<Pick> hotMovies = new ArrayList<>(), hotShows = new ArrayList<>();
@@ -967,7 +1102,7 @@ final class Recs {
     private static void add(List<Pick> list, JSONObject o, String kind) {
         String backdrop = o.optString("backdrop_path", "");
         if (backdrop.isEmpty() || "null".equals(backdrop)) return;
-        if (Config.HIDE_ANIMATION && animated(o)) return;
+        if (Prefs.hideAnimation() && animated(o)) return;
         Pick p = new Pick();
         p.id = o.optInt("id");
         p.kind = kind;
@@ -1021,7 +1156,7 @@ final class Recs {
                 p.pkg = s[2];
             }
         }
-        if (p.app != null) parts.add(SERVICE_NAME.get(p.app));
+        if (p.app != null) parts.add(name(p.app));
         if (p.tag != null) parts.add(0, p.tag);
         JSONObject ext = o.optJSONObject("external_ids");
         String imdb = ext == null ? "" : ext.optString("imdb_id", "");
@@ -1103,6 +1238,7 @@ final class Recs {
             if (installed(s[2])) return s;
             if (first == null) first = s;
         }
+        if (first == null) for (String[] s : byName) if (s[0].equals(plain(name))) return s;
         return first;
     }
 
@@ -1112,6 +1248,9 @@ final class Recs {
         Set<String> seen = new HashSet<>();
         for (String[] s : SERVICES) {
             if (Prefs.appVisible(s[2]) && HomeApps.launchIntent(c.getPackageManager(), s[2]) != null && seen.add(s[1])) out.add(new String[] {s[1], SERVICE_NAME.get(s[1])});
+        }
+        for (String[] s : readByName(c)) {
+            if (HomeApps.launchIntent(c.getPackageManager(), s[2]) != null && seen.add(s[1])) out.add(new String[] {s[1], s[3]});
         }
         return out;
     }
@@ -1123,6 +1262,7 @@ final class Recs {
     private boolean installed(String pkg) {
         if (!Prefs.appVisible(pkg)) return false;
         for (String[] s : SERVICES) if (s[2].equals(pkg) && Prefs.serviceOff(s[1])) return false;
+        for (String[] s : byName) if (s[2].equals(pkg) && Prefs.serviceOff(s[1])) return false;
         return HomeApps.launchIntent(context.getPackageManager(), pkg) != null;
     }
 
@@ -1131,10 +1271,13 @@ final class Recs {
     }
 
     private long sourceStamp() {
-        long stamp = ((key().hashCode() * 31L + REGION.hashCode()) * 31L + (Config.HIDE_ANIMATION ? 1 : 0)) * 31L
+        long stamp = ((key().hashCode() * 31L + REGION.hashCode()) * 31L + (Prefs.hideAnimation() ? 1 : 0)) * 31L
                 + Config.PLEX_URL.hashCode() * 31L + Aio.identity().hashCode();
         if (stremio()) stamp = stamp * 31L + 1;   // off: the same stamp as before, so nothing is fetched again
         for (String[] service : SERVICES) stamp = stamp * 31L + (installed(service[2]) ? service[2].hashCode() : 0);
+        // Switched on, one found by name counts; off, finding it changes nothing, so nothing is fetched again (a 0 would:
+        // it still multiplies the stamp by 31).
+        for (String[] service : byName) if (installed(service[2])) stamp = stamp * 31L + service[2].hashCode();
         return stamp;
     }
 
@@ -1154,7 +1297,7 @@ final class Recs {
      * the home screen: with Continue Watching or the clock there, nothing opens them, so no lookups spend the quota.
      */
     private boolean linksOn() {
-        String key = Config.WATCHMODE_KEY.trim();
+        String key = watchmodeKey();
         return !key.isEmpty() && cache.getInt("wm:refused", 0) != key.hashCode() && Prefs.topContent().equals(Prefs.TOP_PICKS);
     }
 
@@ -1169,20 +1312,23 @@ final class Recs {
         if (System.currentTimeMillis() < linkRetryAt) return;
         try {
             String link = "";
-            JSONArray found = new JSONObject(watchmode("/search/?search_field=tmdb_" + p.kind + "_id&search_value=" + p.id))
+            JSONArray found = new JSONObject(watchmode("/search/?search_field=tmdb_" + p.kind + "_id&search_value=" + p.id, watchmodeKey()))
                     .optJSONArray("title_results");
             if (found != null && found.length() > 0) {
-                JSONArray sources = new JSONArray(watchmode("/title/" + found.getJSONObject(0).getInt("id") + "/sources/?regions=" + REGION));
+                JSONArray sources = new JSONArray(watchmode("/title/" + found.getJSONObject(0).getInt("id") + "/sources/?regions=" + REGION, watchmodeKey()));
                 String[] service = null;
                 for (String[] s : SERVICES) if (s[1].equals(p.app)) service = s;
+                for (String[] s : byName) if (s[1].equals(p.app)) service = s;
                 for (int i = 0; service != null && i < sources.length() && link.isEmpty(); i++) {
                     JSONObject s = sources.getJSONObject(i);
-                    String name = s.optString("name").toLowerCase(Locale.ROOT).replace(" ", "");
+                    String words = s.optString("name").toLowerCase(Locale.ROOT), name = words.replace(" ", "");
                     String want = service[0].replace(" ", "");
                     // Not a channel sold inside another app ("AppleTV+ Amazon Channel", "Paramount+ (Via Amazon Prime)"):
                     // that link opens Amazon or Apple's app, not the one the pick is for.
                     boolean resold = name.contains("channel") || name.contains("(via");
-                    boolean same = !resold && (want.equals("max") || WHOLE_NAME.contains(want) ? name.equals(want) : name.contains(want));
+                    // Max as a word, as for TMDB's providers: Watchmode calls it "HBO Max" again, and Cinemax isn't it.
+                    boolean same = !resold && (want.equals("max") ? words.matches(".*\\bmax\\b.*")
+                            : WHOLE_NAME.contains(want) ? name.equals(want) : name.contains(want));
                     if (same && s.optString("type").equals("sub") && s.optString("web_url").startsWith("https://")) link = s.optString("web_url");
                 }
             }
@@ -1190,16 +1336,16 @@ final class Recs {
             p.link = link.isEmpty() ? null : link;
         } catch (Exception e) {
             if ("Watchmode returned HTTP 401".equals(e.getMessage())) {
-                cache.edit().putInt("wm:refused", Config.WATCHMODE_KEY.trim().hashCode()).apply();
+                cache.edit().putInt("wm:refused", watchmodeKey().hashCode()).apply();
             }
             linkRetryAt = System.currentTimeMillis() + 10 * 60_000L;   // quota or network: not again right away
             AppLog.w("watchmode: " + e.getMessage());
         }
     }
 
-    private static String watchmode(String path) throws IOException {
+    private static String watchmode(String path, String key) throws IOException {
         HttpURLConnection c = (HttpURLConnection) new URL("https://api.watchmode.com/v1" + path + (path.contains("?") ? "&" : "?")
-                + "apiKey=" + URLEncoder.encode(Config.WATCHMODE_KEY.trim(), "UTF-8")).openConnection();
+                + "apiKey=" + URLEncoder.encode(key, "UTF-8")).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(10000);
         try {

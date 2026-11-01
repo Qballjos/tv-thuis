@@ -44,10 +44,25 @@ public class HomeActivity extends Activity {
         setContentView(home);
         getWindow().setBackgroundDrawable(null);
         if (getIntent().getBooleanExtra(EXTRA_ALL_APPS, false)) home.showAllApps();
+        // At power-on "Live TV" (#346): the first time the home screen comes up after a full start, in Free My TV mode.
+        if (HomeMode.noteHomeShown(this) && SystemClock.elapsedRealtime() < 240_000 && "live".equals(Prefs.powerOn())) {
+            org.json.JSONObject s = HomeMode.state(this);
+            if (HomeMode.FREE.equals(s.optString("mode")) && !s.optBoolean("homeReverted")) home.postDelayed(powerOnLive, 10_000);
+        }
     }
+
+    private boolean resumed, keyPressed;
+
+    /** Live TV, unless a key came first or something else is in front by then. */
+    private final Runnable powerOnLive = () -> {
+        if (!resumed || keyPressed) return;
+        AppLog.w("at power-on: Live TV");
+        HomeApps.open(this, HomeApps.action(HomeApps.LIVE_TV, HomeApps.TOP_LIVE, Ui.tr("Live TV"), "live_tv"), null);
+    };
 
     @Override protected void onResume() {
         super.onResume();
+        resumed = true;
         // TCL's Android 11 records the home activity as translucent (occludesParent=false) whatever its theme says:
         // Android then keeps the app just left visible, and home tasks are layered under all others, so that app stays
         // on screen over ours. Opaque again on every resume (setTranslucent is public from Android 11).
@@ -63,6 +78,7 @@ public class HomeActivity extends Activity {
     }
 
     @Override protected void onPause() {
+        resumed = false;
         if (home != null) home.pause();
         super.onPause();
     }
@@ -87,7 +103,10 @@ public class HomeActivity extends Activity {
     private static final long TWICE_MS = 700;
 
     @Override protected void onDestroy() {
-        if (home != null) home.destroy();
+        if (home != null) {
+            home.removeCallbacks(powerOnLive);
+            home.destroy();
+        }
         super.onDestroy();
     }
 
@@ -97,6 +116,7 @@ public class HomeActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
+        keyPressed = true;
         if (RemoteKeys.onKey(this, event)) return true;
         if (home != null && home.onKey(event)) return true;
         return super.dispatchKeyEvent(event);
