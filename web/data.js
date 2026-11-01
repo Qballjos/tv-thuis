@@ -410,7 +410,7 @@ var Data = (function () {
 
   var cache = stored('recs') || {};
   var picks = cache.picks || [], listAt = cache.listAt || 0, period = cache.period, listLang = cache.lang || '', stamp = cache.stamp || '';
-  var fetchingRecs = false, failedAt = 0, recsError = '';
+  var fetchingRecs = false, failedAt = 0, resumeAt = 0, recsError = '';
   var libraries = {}, libraryStamp = '';
 
   function saveRecs() { store('recs', {picks: picks, listAt: listAt, period: period, lang: listLang, stamp: stamp}); }
@@ -422,7 +422,7 @@ var Data = (function () {
 
   function sourceStamp() {
     var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (Prefs.hideAnimation() ? ':no-animation' : '')
-        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey()) + ':art';
+        + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey()) + ':art-v2';
     for (var i = 0; i < SERVICES.length; i++) s += usable(SERVICES[i][1]) ? '1' : '0';
     return s;
   }
@@ -506,7 +506,25 @@ var Data = (function () {
       else if (!item.recent && !item.resume && (kind === 'trending' || item.kind === kind)) list.push(item);
     }
     if (kind === 'resume') return list.slice(0, Prefs.cards());
+    if (kind === 'recent' || kind === null) return newest(list).slice(0, Prefs.cards());
     return sliceHour(list);
+  }
+
+  function additionTime(raw) {
+    var text = String(raw || ''), n;
+    if (/^[0-9]{9,16}$/.test(text)) { n = Number(text); return n < 100000000000 ? n * 1000 : n; }
+    if (/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d(?:\.\d+)?)?$/.test(text)) text += 'Z';
+    n = Date.parse(text);
+    return isNaN(n) ? 0 : n;
+  }
+
+  function newest(list) {
+    var indexed = [], i;
+    for (i = 0; i < list.length; i++) indexed.push({item: list[i], index: i});
+    indexed.sort(function (a, b) { return (b.item.addedAt || 0) - (a.item.addedAt || 0) || a.index - b.index; });
+    var out = [];
+    for (i = 0; i < indexed.length; i++) out.push(indexed[i].item);
+    return out;
   }
 
   function tipRows(kind) {
@@ -761,6 +779,7 @@ var Data = (function () {
     var landscape = sizedImage(row.backdrop || '', itemId, true);
     return {
       aio: true, recent: recent, kind: kind, id: id, itemId: itemId,
+      addedAt: additionTime(row.when || row.DateCreated || row.addedAt),
       title: row.title || '',
       meta: row.detail || row.status || '',
       poster: portrait || landscape,
@@ -836,6 +855,20 @@ var Data = (function () {
   }
 
   function fetchResume(done) {
+    resumeAt = Date.now();
+    if (aioOn()) {
+      aioCall('GET', '/api/homepage/resume', null, function (err, result) {
+        if (err) { fetchJellyfinResume(done); return; }
+        var rows = [];
+        addResumeItems(result && result.items, rows, {});
+        done(rows);
+      });
+      return;
+    }
+    fetchJellyfinResume(done);
+  }
+
+  function fetchJellyfinResume(done) {
     if (!Prefs.jellyfinUrl() || !Prefs.jellyfinKey()) { done(null); return; }
     jfGet('/Users', function (err, users) {
       if (err || !users || !users.length) { done(null); return; }
@@ -992,7 +1025,8 @@ var Data = (function () {
     var stale = st !== stamp || p !== period || t - listAt > 6 * 3600000 || t < listAt || !picks.length || listLang !== I18N.lang;
     var wanted = all(), missing = false;
     for (var i = 0; i < wanted.length; i++) missing = missing || !wanted[i].detailed;
-    if (!stale && !missing) return;
+    var refreshResume = aioOn() && (!resumeAt || t < resumeAt || t - resumeAt >= 60000);
+    if (!stale && !missing && !refreshResume) return;
     fetchingRecs = true;
     stamp = st;
     function finish(err) {
@@ -1002,8 +1036,16 @@ var Data = (function () {
       changed();
     }
     function detailWanted() {
-      var todo = all().filter(function (x) { return !x.detailed; });
-      each(todo, function (x, next) { details(x, function () { next(); }); }, function () { finish(null); });
+      var todo = all().filter(function (x) { return !x.detailed || (KEY && x.aio && x.mediaId > 0 && !x.recent && !x.resume && !x.artChecked); });
+      each(todo, function (x, next) {
+        if (!x.aio) { details(x, function () { next(); }); return; }
+        x.artChecked = true;
+        if (x.backdrop && x.backdrop !== x.poster) { next(); return; }
+        tmdb('/' + x.kind + '/' + x.mediaId + '?language=' + lang(), function (err, detail) {
+          if (!err && detail && detail.backdrop_path) x.backdrop = 'https://image.tmdb.org/t/p/w1280' + detail.backdrop_path;
+          next();
+        });
+      }, function () { finish(null); });
     }
     if (stale) {
       fetchList(function (err) {
@@ -1011,6 +1053,13 @@ var Data = (function () {
         listAt = Date.now();
         period = p;
         listLang = I18N.lang;
+        detailWanted();
+      });
+    } else if (refreshResume) {
+      var identity = sourceStamp();
+      fetchResume(function (rows) {
+        if (identity !== sourceStamp()) { fetchingRecs = false; return; }
+        if (rows) picks = picks.filter(function (item) { return !item.resume; }).concat(rows);
         detailWanted();
       });
     } else {
@@ -1022,7 +1071,7 @@ var Data = (function () {
   function all() {
     var out = [], seen = {}, kinds, aio, k, list, i, id;
     if (aioOn()) {
-      kinds = ['resume', 'recent', 'movie', 'tv'];
+      kinds = ['resume', 'recent', 'movie', 'tv', 'trending'];
       for (k = 0; k < kinds.length; k++) {
         list = aioRows(kinds[k]);
         for (i = 0; i < list.length; i++) {
@@ -1095,7 +1144,7 @@ var Data = (function () {
     },
     image: function (path, size) {
       if (!path) return '';
-      if (path.indexOf('http') === 0 || path.charAt(0) === '/') return sizedImage(path, '', size === 'w1280' || size === 'original');
+      if (path.indexOf('http') === 0 || path.indexOf('/api/') === 0 || path.indexOf('/Items/') === 0) return sizedImage(path, '', size === 'w1280' || size === 'original');
       return 'https://image.tmdb.org/t/p/' + (size || 'w1280') + path;
     },
     needsAuth: function (url) {

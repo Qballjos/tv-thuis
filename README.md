@@ -45,10 +45,20 @@ In **Startscherm → Bovenaan het scherm** kies je wat de kaarten tonen:
 
 OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr. OK op een titel die er al is, opent Wholphin. Plaatjes voor Verder kijken en Pas toegevoegd gaan via de AIO-manager (https), niet rechtstreeks over http naar Jellyfin.
 
+**Verder kijken** wordt op het startscherm opnieuw opgehaald zonder de zes uur voor nieuwe aanbevelingen af te wachten.
+Dit werkt via de AIO-koppeling ook zonder een Jellyfin-sleutel op de tv. Bij **Bovenaan het scherm → Verder kijken**
+worden Wholphin-items uit Android gebruikt; als Wholphin daar nog niets aanbiedt, probeert TV Thuis dezelfde AIO-koppeling.
+Wholphin moet al aangemeld zijn en automatisch aanmelden toestaan om een titel via zijn koppeling te openen.
+
 **Verder kijken** bevat alleen begonnen films en volgende afleveringen; dit is niet je hele bibliotheek.
+Pas toegevoegd staat altijd op toevoegdatum: nieuwste eerst, zonder wisselende uurvolgorde of het verbergen van vervolgdelen.
 Films en Series laden per 20 titels door en gebruiken geen limiet van 25–40 aanbevelingen. Alleen afbeeldingen rond
 de geselecteerde tegel worden voorbereid. De AIO-nightly met de verbeterde afbeeldingsroute levert brede achtergronden
 van 1280 × 720 en posters van 780 × 1170, in plaats van een uitvergrote miniatuurposter.
+
+Trending gebruikt brede afbeeldingen als de manager die aanlevert. Levert een oudere AIO-versie alleen posters,
+dan zoekt TV Thuis de brede afbeelding via de bestaande TMDB-sleutel, wanneer die is ingesteld. Zonder brede
+artwork, bij een mislukte download of zonder TMDB-sleutel blijft de gewone poster zichtbaar.
 
 De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
 
@@ -69,8 +79,8 @@ Wholphin gebruiken. De LG-installatie past de schermresolutie automatisch aan vo
 ## Profielen (Android en Google TV)
 
 De profielafbeelding rechtsboven opent de profielkeuze. Via **Profielen beheren** kun je profielen toevoegen,
-hernoemen, verwijderen en hun apps en afbeelding kiezen. Er zijn 25 ingebouwde afbeeldingen, inclusief een
-regenboog. De pijltjestoetsen bladeren door de afbeeldingen; de huidige keuze komt ook op het startscherm.
+hernoemen, verwijderen en hun apps en afbeelding kiezen. Er zijn 31 ingebouwde afbeeldingen, inclusief een
+regenboog en zes ingetogen keuzes: twee portretten, maan, bergen, blad en ringen. De pijltjestoetsen bladeren door de afbeeldingen; de huidige keuze komt ook op het startscherm.
 De profielkeuze is ook bereikbaar via **Startscherm → Profielen**.
 
 Elk profiel heeft een eigen app-plank, app-zichtbaarheid, taal, thema, weer- en kaartinstellingen, inclusief de
@@ -95,7 +105,13 @@ In **Startscherm → Schermbeveiliging**:
 | Start na | 5 min, 10 min, 15 min, 30 min, 1 uur of 2 uur |
 | Aanvraagknop | Welke knop een titel aanvraagt of opent (standaard OK) |
 | Foto-indeling | Schermvullend of Fotocollage |
+| Bron schermbeveiliging | Automatisch, AIO of Immich |
 | Bekijken | Direct de beveiliging tonen |
+
+**Bron schermbeveiliging** geldt per profiel. *AIO* toont alleen AIO-afbeeldingen; *Immich* toont alleen
+foto's uit de geselecteerde Immich-verzameling of het gekozen album, ook bij de collage. Een lege of onbereikbare
+gekozen bron toont de klok en haalt geen beelden uit een andere bron. *Automatisch* houdt de bestaande keuze:
+eigen foto's indien beschikbaar, anders AIO of de TMDB-tips. Het Immich-album kies je onder **Mijn foto's**.
 
 Tijdens de beveiliging: **links** / **rechts** voor de vorige of volgende foto; de gekozen aanvraagknop vraagt of opent. Andere knoppen sluiten de beveiliging. Volume blijft van de tv.
 

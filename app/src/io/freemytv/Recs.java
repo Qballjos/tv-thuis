@@ -49,6 +49,7 @@ import java.util.concurrent.Executors;
 final class Recs {
     static final class Pick {
         int id;
+        int tmdbId;             // real TMDB id; never a generated row index
         String kind;            // "movie" or "tv"
         String title, backdrop, poster, meta = "", app, pkg;   // poster: the portrait image of the narrow cards
         String link;            // opens the title in its app (looked up with Watchmode), or null: the app's home
@@ -59,6 +60,8 @@ final class Recs {
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
         boolean detailed;
         boolean aio;             // from the household media manager, not TMDB
+        boolean artChecked;
+        long addedAt;           // addition date, milliseconds since epoch
         boolean recent;          // recently added in the library (aio); otherwise a trending title
         boolean resume;          // continue watching (Jellyfin): OK opens this item in Wholphin
         boolean canRequest;      // missing on the server: OK asks the media manager for it
@@ -83,7 +86,7 @@ final class Recs {
     /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
     private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
-    private static final int CACHE_VERSION = 12;   // 12: AIO continue/recent art goes through the manager (https)
+    private static final int CACHE_VERSION = 13;   // 13: addition dates and refreshed AIO artwork
     /** TMDB's titles in the list (trending, then the new releases), as on main. */
     private static final int POOL = 24;
     /** Trakt's titles in the list: about what the tabs show of them (now(): up to 2 in 5 in progress, 3 in 5 liked). */
@@ -202,7 +205,7 @@ final class Recs {
     private final java.util.Set<String> pending = new java.util.HashSet<>();
     private volatile List<Pick> picks = new ArrayList<>();
     private volatile int period = -1;
-    private volatile long listAt;
+    private volatile long listAt, resumeAt;
     private volatile boolean fetching;
     private volatile String error = "";
     private volatile boolean light;     // light design: builds only the cards (all three tabs' cards fit in memory)
@@ -504,6 +507,10 @@ final class Recs {
             else if (!p.recent && !p.resume && ("trending".equals(kind) || kind.equals(p.kind))) list.add(p);
         }
         int cards = Prefs.cards();
+        if (!resume && (kind == null || "recent".equals(kind))) {
+            list = MediaOrder.newest(list, p -> p.addedAt);
+            return new ArrayList<>(list.subList(0, Math.min(cards, list.size())));
+        }
         if (resume) return list.size() > cards ? new ArrayList<>(list.subList(0, cards)) : list;
         List<Pick> out = new ArrayList<>();
         if (list.isEmpty()) return out;
@@ -662,10 +669,11 @@ final class Recs {
         int p = period(now);
         boolean stale = newKey || p != period || now - listAt > LIST_EVERY || now < listAt || picks.isEmpty()
                 || !listLanguage.equals(Ui.language);
+        boolean refreshResume = Aio.configured() && (resumeAt == 0 || now < resumeAt || now - resumeAt >= 60_000);
         boolean missing = false;
         for (Pick pick : wanted()) missing |= !pick.detailed || !hasImage(pick) || needsLink(pick);
         boolean checkTrakt = !stale && !newTrakt && Trakt.signedIn(context) && (now - traktCheckedAt > TRAKT_EVERY || now < traktCheckedAt);
-        if (!stale && !missing && !checkTrakt && !newTrakt) return;
+        if (!stale && !missing && !checkTrakt && !newTrakt && !refreshResume) return;
         keyStamp = stamp;
         traktStamp = trakt;
         fetching = true;
@@ -689,6 +697,16 @@ final class Recs {
                     Map<String, Pick> known = new HashMap<>();
                     if (!stale) for (Pick k : picks) if (k.detailed) known.put(key(k), k);
                     fetchList(p, known);
+                } else if (refreshResume) {
+                    resumeAt = System.currentTimeMillis();
+                    try {
+                        List<Pick> resume = new ArrayList<>();
+                        Aio.resume(resume);
+                        List<Pick> updated = new ArrayList<>();
+                        for (Pick pick : picks) if (!pick.resume) updated.add(pick);
+                        updated.addAll(resume);
+                        picks = updated;
+                    } catch (IOException e) { AppLog.w("continue watching: refresh unavailable"); }
                 }
                 // One failing title doesn't stop the others; whatever has no app on the TV is not downloaded.
                 int failures = 0, tried = 0;
@@ -736,13 +754,7 @@ final class Recs {
      */
     List<Pick> showcase() {
         List<Pick> out = new ArrayList<>();
-        if (Aio.configured()) {
-            java.util.Set<String> seen = new java.util.HashSet<>();
-            for (Pick p : picks) {
-                if (p.aio && !p.recent && !p.resume && hasImage(p) && seen.add(franchise(p.title))) out.add(p);
-            }
-            return out;
-        }
+        if (Aio.configured()) return aioShowcase();
         if (!hasKey(context)) return out;
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (Pick p : wanted()) if (hasImage(p) && seen.add(franchise(p.title))) out.add(p);
@@ -751,6 +763,15 @@ final class Recs {
             if (p.detailed && p.pkg != null && have.computeIfAbsent(p.pkg, this::installed) && hasImage(p)
                     && (p.servicePkg == null || have.computeIfAbsent(p.servicePkg, this::installed))
                     && seen.add(franchise(p.title))) out.add(p);
+        }
+        return out;
+    }
+
+    List<Pick> aioShowcase() {
+        List<Pick> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Pick p : picks) {
+            if (p.aio && !p.resume && hasImage(p) && seen.add(key(p))) out.add(p);
         }
         return out;
     }
@@ -809,7 +830,7 @@ final class Recs {
         List<Pick> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
         if (Aio.configured()) {
-            for (String kind : new String[] {"resume", "recent", "movie", "tv"}) {
+            for (String kind : new String[] {"resume", "recent", "movie", "tv", "trending"}) {
                 for (Pick p : aioNow(kind)) if (seen.add(key(p))) out.add(p);
             }
         }
@@ -839,6 +860,7 @@ final class Recs {
             List<Pick> trending = new ArrayList<>(), recent = new ArrayList<>();
             Aio.fill(trending, recent);
             List<Pick> resume = new ArrayList<>();
+            resumeAt = System.currentTimeMillis();
             try {
                 Aio.resume(resume);
             } catch (Exception e) {
@@ -1463,8 +1485,30 @@ final class Recs {
 
     // MARK: - Images (TMDB originals on disk, up to 24 so the whole list fits; this hour's kept ready in memory)
 
+    /** Older AIO versions send posters only. Use the existing TMDB key when available, otherwise keep the poster. */
+    private void enrichAioArt(Pick p) {
+        if (p.artChecked || p.recent || p.resume || key().isEmpty() || p.tmdbId <= 0) return;
+        p.artChecked = true;
+        if (p.imageUrl != null && !p.imageUrl.equals(p.posterUrl)) return;
+        try {
+            JSONObject detail = get("/" + p.kind + "/" + p.tmdbId + "?language=" + lang());
+            String path = detail.optString("backdrop_path", "");
+            if (!path.isEmpty() && !"null".equals(path)) p.imageUrl = "https://image.tmdb.org/t/p/w1280" + path;
+        } catch (Exception ignored) {   // Poster still works without TMDB or landscape art.
+        }
+    }
+
+    private static boolean readableImage(File file) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getPath(), bounds);
+        return bounds.outWidth > 0 && bounds.outHeight > 0;
+    }
+
     private void download(Pick p) throws IOException {
+        if (p.aio) enrichAioArt(p);
         File f = imageFile(p);
+        if (f.exists() && !readableImage(f)) f.delete();
         if (p.aio && (p.imageUrl == null || p.imageUrl.isEmpty())) return;
         if (p.imageUrl != null && !p.imageUrl.isEmpty()) {
             if (f.exists() && p.posterUrl != null && !p.posterUrl.isEmpty() && !p.imageUrl.equals(p.posterUrl)) {
@@ -1543,6 +1587,10 @@ final class Recs {
             throw e;
         } finally {
             c.disconnect();
+        }
+        if (!readableImage(part)) {
+            part.delete();
+            throw new IOException("unreadable image");
         }
         if (!part.renameTo(f)) throw new IOException("couldn't save the image");
         prune(f.getParentFile());
@@ -1646,7 +1694,7 @@ final class Recs {
                         .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
                         .put("servicePkg", p.servicePkg == null ? "" : p.servicePkg)
                         .put("tag", p.tag == null ? "" : p.tag).put("mine", p.mine)
-                        .put("detailed", p.detailed).put("aio", p.aio).put("recent", p.recent).put("resume", p.resume)
+                        .put("detailed", p.detailed).put("aio", p.aio).put("tmdbId", p.tmdbId).put("artChecked", p.artChecked).put("addedAt", p.addedAt).put("recent", p.recent).put("resume", p.resume)
                         .put("canRequest", p.canRequest).put("itemId", p.itemId == null ? "" : p.itemId));
             }
             SharedPreferences.Editor e = cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
@@ -1685,6 +1733,9 @@ final class Recs {
             p.detailed = o.optBoolean("detailed");
             p.aio = o.optBoolean("aio");
             p.recent = o.optBoolean("recent");
+            p.addedAt = o.optLong("addedAt");
+            p.artChecked = o.optBoolean("artChecked");
+            p.tmdbId = o.optInt("tmdbId");
             p.resume = o.optBoolean("resume");
             p.canRequest = o.optBoolean("canRequest");
             p.itemId = o.optString("itemId").isEmpty() ? null : o.optString("itemId");

@@ -409,7 +409,7 @@
     var tabs = $('tabs');
     tabs.innerHTML = '';
     var names = Data.aioTop()
-      ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows'), tr('TRENDING')]
+      ? [tr('Continue watching'), tr('Recently added'), tr('Movies'), tr('Shows'), tr('Trending')]
       : [tr('Explore'), tr('Movies'), tr('Shows')];
     for (var i = 0; i < names.length; i++) {
       var t = el('button', 'tab', tabs, names[i]);
@@ -448,7 +448,12 @@
     if (!Data.hasKey() && st.zone === Z.TOP && st.top < tabCount()) st.top = tabCount();
     var same = list.length === cards.length;
     for (var i = 0; same && i < list.length; i++) same = list[i].id === cards[i].id && list[i].backdrop === cards[i].backdrop && list[i].meta === cards[i].meta;
-    if (same && holder.children.length === list.length) return;
+    if (same && holder.children.length === list.length) {
+      loadCardImages();
+      layoutCards();
+      backdrop(list.length ? Data.image(list[st.card].backdrop, 'w300') : '');
+      return;
+    }
     cards = list;
     var oldImages = holder.querySelectorAll('.img .layer');
     for (var old = 0; old < oldImages.length; old++) releaseImage(oldImages[old]);
@@ -476,7 +481,7 @@
       if (i < st.card - 2 || i >= st.card + 6) {
         for (var j = 0; j < layers.length; j++) releaseImage(layers[j]);
         nodes[i].removeAttribute('data-back');
-      } else if (cards[i]) paint(layers[0], cards[i].poster || cards[i].backdrop, cards[i].poster ? 'w342' : 'w780');
+      } else if (cards[i]) paintArt(layers[0], cards[i].poster || cards[i].backdrop, cards[i].poster ? 'w342' : 'w780');
     }
   }
 
@@ -493,9 +498,9 @@
       n.style.width = w + 'px';
       setClass(n, 'wide', wide);
       setClass(n, 'edge', at < 0 || at > 1740);
-      if (wide && !n.getAttribute('data-back') && cards[i]) {
+      if (wide && cards[i]) {
         n.setAttribute('data-back', '1');
-        paint(n.querySelector('.back'), cards[i].backdrop, 'w1280');
+        paintArt(n.querySelector('.back'), cards[i].backdrop, 'w1280', cards[i].poster);
       }
       left += w + 40;
     }
@@ -527,20 +532,33 @@
     else img.src = url;
   }
 
-  function paint(node, path, size) {
+  function paintArt(node, path, size, fallback) {
     if (!node) return;
-    var src = Data.image(path, size);
-    if (node._artSource === src) return;
+    var src = Data.image(path, size), backup = Data.image(fallback, 'w780'), key = src + '|' + backup;
+    if (node._artSource === key) return;
     releaseImage(node);
-    if (!src) return;
-    node._artSource = src;
+    if (!src && !backup) return;
+    node._artSource = key;
     var generation = node._artGeneration;
-    if (Data.needsAuth(src)) Data.loadImage(src, function (blob) {
-      if (node._artGeneration !== generation) { if (blob) URL.revokeObjectURL(blob); return; }
-      if (blob) { node._artBlob = blob; node.style.backgroundImage = 'url(' + blob + ')'; }
-      else node._artSource = '';
-    });
-    else node.style.backgroundImage = 'url(' + src + ')';
+    function load(url, last) {
+      if (!url || node._artGeneration !== generation) return;
+      function decode(actual, blob) {
+        if (node._artGeneration !== generation) { if (blob) URL.revokeObjectURL(actual); return; }
+        if (!actual) { retry(); return; }
+        var image = new Image();
+        image.onload = function () {
+          if (node._artGeneration !== generation) { if (blob) URL.revokeObjectURL(actual); return; }
+          if (blob) node._artBlob = actual;
+          node.style.backgroundImage = 'url(' + actual + ')';
+        };
+        image.onerror = function () { if (blob) URL.revokeObjectURL(actual); retry(); };
+        image.src = actual;
+      }
+      function retry() { if (!last && backup && backup !== url) load(backup, true); }
+      if (Data.needsAuth(url)) Data.loadImage(url, function (blob) { decode(blob, !!blob); });
+      else decode(url, false);
+    }
+    load(src || backup, !src || src === backup);
   }
 
   function releaseImage(node) {
@@ -1773,7 +1791,7 @@
       saverIndex = (i % photos.length + photos.length) % photos.length;
       var p = photos[saverIndex];
       var back = front === a ? b : a;
-      paint(back, p.backdrop, 'original');
+      paintArt(back, p.backdrop, 'original', p.poster);
       back.style.webkitTransform = back.style.transform = 'scale(1.0)';
       clock.children[3].textContent = p.title;
       saverPick = p;

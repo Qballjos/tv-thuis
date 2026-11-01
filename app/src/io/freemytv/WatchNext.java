@@ -82,9 +82,48 @@ final class WatchNext {
         for (long channel : continueChannels(cr, c.getPackageName())) {
             all.addAll(read(cr, TvContract.buildPreviewProgramsUriForChannel(channel)));
         }
+        addWholphinResume(c, all);
         List<Item> out = select(all, Prefs.watchOff(), Prefs.watchHidden(), Prefs::appVisible);
         for (Item it : out) it.app = appName(c, it.pkg);
         return out;
+    }
+
+    private static List<Item> aioResume = Collections.emptyList();
+    private static String aioIdentity = "";
+    private static long aioReadAt;
+
+    /** Wholphin may not publish Watch Next yet. Reuse the already-authorized AIO connection, off the UI thread. */
+    private static void addWholphinResume(Context c, List<Item> all) {
+        if (!Aio.configured()) return;
+        String pkg = Aio.playerPackage(c);
+        if (pkg == null || !pkg.contains("wholphin") || !Prefs.appVisible(pkg) || Prefs.watchOff().contains(pkg)) return;
+        for (Item item : all) if (pkg.equals(item.pkg)) return;
+        String identity = Aio.identity();
+        long now = android.os.SystemClock.elapsedRealtime();
+        if (!identity.equals(aioIdentity) || now < aioReadAt || now - aioReadAt > 60_000) {
+            aioIdentity = identity;
+            aioReadAt = now;
+            List<Item> fresh = new ArrayList<>();
+            try {
+                List<Recs.Pick> resume = new ArrayList<>();
+                Aio.resume(resume);
+                for (Recs.Pick pick : resume) {
+                    Item item = new Item(pkg, null, null);   // system cards keep their local-only artwork rule
+                    item.title = pick.title;
+                    item.episode = pick.meta;
+                    item.intent = "wholphin://view?itemId=" + Uri.encode(pick.itemId);
+                    item.engaged = System.currentTimeMillis() - fresh.size();
+                    fresh.add(item);
+                }
+            } catch (java.io.IOException | RuntimeException e) { AppLog.w("continue watching: AIO resume unavailable"); }
+            aioResume = fresh;
+        }
+        all.addAll(aioResume);
+    }
+
+    /** Wholphin versions have written Unix seconds alongside Android's expected milliseconds. */
+    static long engagementMillis(long stamp) {
+        return stamp > 0 && stamp < 100_000_000_000L ? stamp * 1000 : stamp;
     }
 
     /** Profile visibility and item choices apply before sorting, deduplication and per-app limits. */
@@ -131,6 +170,9 @@ final class WatchNext {
             packages(cr, TvContract.WatchNextPrograms.CONTENT_URI, TvContract.WatchNextPrograms.COLUMN_PACKAGE_NAME, null, pkgs);
             // Home screen rows (not the tuner's channels): apps write these, and Watch Next, without any permission.
             packages(cr, TvContract.Channels.CONTENT_URI, TvContract.Channels.COLUMN_PACKAGE_NAME, TvContract.Channels.COLUMN_TYPE, pkgs);
+        }
+        for (String pkg : new String[] {"com.github.damontecres.wholphin", "com.github.damontecres.wholphin.debug"}) {
+            if (HomeApps.launchIntent(pm, pkg) != null) pkgs.add(pkg);
         }
         pkgs.remove(c.getPackageName());
         // Only apps you can open from the TV: leaves out system pieces (Shell) and home screens (other launchers),
@@ -236,7 +278,7 @@ final class WatchNext {
                 if (it.episode != null && (it.episode.isEmpty() || it.title.contains(it.episode))) it.episode = null;
                 it.duration = number(cur, TvContract.WatchNextPrograms.COLUMN_DURATION_MILLIS);
                 it.position = number(cur, TvContract.WatchNextPrograms.COLUMN_LAST_PLAYBACK_POSITION_MILLIS);
-                it.engaged = number(cur, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS);
+                it.engaged = engagementMillis(number(cur, TvContract.WatchNextPrograms.COLUMN_LAST_ENGAGEMENT_TIME_UTC_MILLIS));
                 it.intent = text(cur, TvContract.WatchNextPrograms.COLUMN_INTENT_URI);
                 out.add(it);
             }

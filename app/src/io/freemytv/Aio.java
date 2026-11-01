@@ -256,8 +256,10 @@ final class Aio {
             Recs.Pick p = new Recs.Pick();
             p.aio = true;
             p.recent = recent;
+            p.addedAt = MediaOrder.time(row.optString("when", row.optString("DateCreated", row.optString("addedAt", ""))));
             p.kind = kind(row.optString("mediaType", recent ? "movie" : "movie"));
             int mediaId = row.optInt("mediaId", 0);
+            p.tmdbId = mediaId;
             p.id = mediaId > 0 ? mediaId : into.size() + i + 1;
             p.itemId = libraryId(row);
             p.title = title;
@@ -270,7 +272,7 @@ final class Aio {
             p.imageUrl = !landscape.isEmpty() ? landscape : portrait;   // wide card
             p.posterUrl = !portrait.isEmpty() ? portrait : p.imageUrl;  // tall card
             String token = p.itemId != null ? p.itemId : p.kind + "-" + p.id;
-            p.backdrop = "aio-" + (recent ? "r-" : "t-") + token;
+            p.backdrop = "aio-v2-" + (recent ? "r-" : "t-") + token;
             p.poster = p.backdrop;
             p.detailed = true;
             p.app = p.canRequest ? "request" : "library";
@@ -423,10 +425,14 @@ final class Aio {
      * The first user Jellyfin lists often has nothing in progress. No-op until a server and API key are saved.
      */
     static void resume(List<Recs.Pick> into) throws IOException {
-        if (Prefs.aioPaired()) {
-            ensureToken();
-            addResume(into, new java.util.HashSet<>(), array(get("/api/homepage/resume"), "items"));
-            return;
+        if (configured()) {
+            try {
+                ensureToken();
+                addResume(into, new java.util.HashSet<>(), array(get("/api/homepage/resume"), "items"));
+                if (!into.isEmpty() || Prefs.aioPaired()) return;
+            } catch (IOException e) {
+                if (Prefs.aioPaired()) throw e;   // paired TVs never need a Jellyfin credential
+            }
         }
         if (Prefs.jellyfinUrl().isEmpty() || Prefs.jellyfinKey().isEmpty()) return;
         JSONArray users = jfList("/Users");
@@ -487,7 +493,7 @@ final class Aio {
             p.posterUrl = sizedImage("", imageId, false);
             p.imageUrl = sizedImage("", imageId, true);
             if (p.imageUrl.isEmpty()) p.imageUrl = p.posterUrl;
-            p.backdrop = "aio-c-" + id;
+            p.backdrop = "aio-v2-c-" + id;
             p.poster = p.backdrop;
             into.add(p);
         }

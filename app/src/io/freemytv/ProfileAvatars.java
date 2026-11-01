@@ -24,6 +24,12 @@ final class ProfileAvatars {
 
     static String label(String id) {
         switch (id) {
+            case "quiet-slate": return Ui.tr("Slate portrait");
+            case "quiet-stone": return Ui.tr("Stone portrait");
+            case "quiet-moon": return Ui.tr("Moon");
+            case "quiet-mountain": return Ui.tr("Mountains");
+            case "quiet-leaf": return Ui.tr("Leaf");
+            case "quiet-rings": return Ui.tr("Rings");
             case "fox": return Ui.tr("Fox");
             case "cat": return Ui.tr("Cat");
             case "robot": return Ui.tr("Robot");
@@ -62,6 +68,11 @@ final class ProfileAvatars {
         Path clip = new Path();
         clip.addCircle(128, 128, 126, Path.Direction.CW);
         c.clipPath(clip);
+        if (id.startsWith("quiet-")) {
+            quiet(c, p, id);
+            IMAGES.put(id, bitmap);
+            return bitmap;
+        }
         int color = COLORS[Profiles.AVATARS.indexOf(id)];
         p.setShader(new LinearGradient(24, 12, 220, 256, lighter(color), color, Shader.TileMode.CLAMP));
         c.drawCircle(128, 128, 126, p);
@@ -97,6 +108,32 @@ final class ProfileAvatars {
         }
         IMAGES.put(id, bitmap);
         return bitmap;
+    }
+
+    private static void quiet(Canvas c, Paint p, String id) {
+        int background = id.equals("quiet-stone") ? 0xFF504C47 : id.equals("quiet-leaf") ? 0xFF39463F : 0xFF303A46;
+        circle(c, p, 128, 128, 126, background);
+        int ink = 0xFFD6D9DA;
+        if (id.equals("quiet-slate") || id.equals("quiet-stone")) {
+            circle(c, p, 128, 98, 32, ink);
+            oval(c, p, 64, 145, 192, 251, ink);
+        } else if (id.equals("quiet-moon")) {
+            circle(c, p, 125, 128, 64, ink);
+            circle(c, p, 151, 106, 57, background);
+            circle(c, p, 183, 68, 3, ink);
+        } else if (id.equals("quiet-mountain")) {
+            triangle(c, p, 0xFF8E9AA5, 37, 187, 104, 83, 171, 187);
+            triangle(c, p, ink, 98, 187, 161, 109, 220, 187);
+        } else if (id.equals("quiet-leaf")) {
+            c.save(); c.rotate(35, 128, 128);
+            oval(c, p, 91, 60, 165, 193, ink);
+            p.setColor(background); p.setStrokeWidth(5); c.drawLine(128, 94, 128, 205, p);
+            c.restore();
+        } else {
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(5); p.setColor(ink);
+            c.drawCircle(108, 128, 49, p); c.drawCircle(150, 128, 49, p);
+            p.setStyle(Paint.Style.FILL);
+        }
     }
 
     private static int lighter(int color) {
