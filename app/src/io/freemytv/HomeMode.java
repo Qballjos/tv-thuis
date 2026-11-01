@@ -336,6 +336,104 @@ final class HomeMode {
         if (AMAZON) return;
         ensureRemoteService(c, 30_000);
         ModeJob.schedule(c, ModeJob.VERIFY, null, 45_000);
+        Prefs.reload();
+        if ("home".equals(Prefs.powerOn())) ModeJob.schedule(c, ModeJob.POWER_ON, null, 10_000);
+    }
+
+    // MARK: - At power-on (Home Settings, #396 and #346): only after a full start, never when the TV wakes from standby
+
+    private static File homeShownFile(Context c) {
+        return new File(c.getFilesDir(), "home-shown");
+    }
+
+    private static int bootCount(Context c) {
+        return android.provider.Settings.Global.getInt(c.getContentResolver(), android.provider.Settings.Global.BOOT_COUNT, -1);
+    }
+
+    /**
+     * The home screen came up (:home, HomeActivity). Keeps the uptime of the first time in this start, the moment a key
+     * would have to come after to count as the person's. True when this was that first time.
+     */
+    static boolean noteHomeShown(Context c) {
+        int boot = bootCount(c);
+        if (boot < 0 || homeShownAt(c) != 0) return false;
+        try (FileOutputStream out = new FileOutputStream(homeShownFile(c))) {
+            out.write((boot + " " + SystemClock.uptimeMillis()).getBytes(StandardCharsets.US_ASCII));
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** When the home screen first came up in this start (uptime), or 0. */
+    private static long homeShownAt(Context c) {
+        try (FileInputStream in = new FileInputStream(homeShownFile(c))) {
+            byte[] data = new byte[48];
+            int n = in.read(data);
+            String[] saved = n > 0 ? new String(data, 0, n, StandardCharsets.US_ASCII).trim().split(" ") : new String[0];
+            return saved.length == 2 && saved[0].equals(String.valueOf(bootCount(c))) ? Long.parseLong(saved[1]) : 0;
+        } catch (IOException | NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    private static final Pattern UPTIME = Pattern.compile("^(\\d+)(\\s|$)");
+    private static final Pattern RESUMED = Pattern.compile("u\\d+ ([\\w.]+)/");
+
+    /**
+     * The power manager's last user activity (uptime ms, "310962 (5000 ms ago)"; the latest of its display groups), or
+     * MAX_VALUE where it reads otherwise: then nothing counts as untouched.
+     */
+    private static long lastUserActivity(Adb adb) throws IOException {
+        long last = -1;
+        for (String line : adb.shell("dumpsys power | grep -i 'lastUserActivityTime='").split("\n")) {
+            int at = line.indexOf('=');
+            if (at < 0) continue;
+            Matcher m = UPTIME.matcher(line.substring(at + 1).trim());
+            if (!m.find()) return Long.MAX_VALUE;
+            last = Math.max(last, Long.parseLong(m.group(1)));
+        }
+        return last < 0 ? Long.MAX_VALUE : last;
+    }
+
+    /**
+     * The package of the activity in front, or null. Android 9 to 11 write "mResumedActivity:", 12 and 13
+     * "topResumedActivity=", 14 "Resumed:" (top first); all of them "ResumedActivity:" too.
+     */
+    private static String resumedPackage(Adb adb) throws IOException {
+        Matcher m = RESUMED.matcher(adb.shell("dumpsys activity activities | grep -m 3 -E 'ResumedActivity|Resumed:'"));
+        return m.find() ? m.group(1) : null;
+    }
+
+    /**
+     * At power-on "Home screen": some MediaTek TV centers put themselves on top about a second after the home screen
+     * comes up at boot ("Please scan channels" where there's no antenna, #396). Gives the screen back to ours, but only
+     * while no key has been pressed since our home screen first came up, and only in the first 4 minutes.
+     */
+    static void powerOnNow(Context app) {
+        Prefs.reload();
+        if (!"home".equals(Prefs.powerOn())) return;
+        List<String> tvApps = Arrays.asList(HomeApps.LIVE_TV_APPS);
+        for (int i = 0; i < 6 && SystemClock.elapsedRealtime() < 240_000; i++) {
+            if (i > 0) SystemClock.sleep(10_000);
+            long shown = homeShownAt(app);
+            if (shown == 0) continue;   // our home screen isn't up yet
+            synchronized (RUN) {   // never in the middle of a switch or the boot check's changes
+                JSONObject s = state(app);
+                if (!FREE.equals(s.optString("mode")) || s.optBoolean("homeReverted")) return;
+                try (Adb adb = Adb.connect(app, 10_000, null)) {
+                    if (lastUserActivity(adb) >= shown) return;   // a key since: what's in front is their choice
+                    String front = resumedPackage(adb);
+                    if (front != null && tvApps.contains(front)) {
+                        adb.shell("am start -a android.intent.action.MAIN -c android.intent.category.HOME");
+                        AppLog.w("at power-on: " + front + " took the screen before any key, back to the home screen");
+                        return;
+                    }
+                } catch (IOException e) {
+                    AppLog.w("at power-on: " + e.getMessage());
+                }
+            }
+        }
     }
 
     /** After an update of this app: complete Free My TV mode if anything is missing. */

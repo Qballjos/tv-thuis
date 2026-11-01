@@ -54,7 +54,7 @@ before you do it, and let them do the taps on the TV.
    `config.properties`), they add it on the TV themselves: Home Settings > TMDB key (a QR code for their phone, or typed).
    Without a key everything works except the picks and their photos on the screensaver (photos they send themselves
    still show).
-   The same goes for the optional `watchmode_key` (free, watchmode.com; makes picks open the title's page): theirs, secret, only in `config.properties`.
+   The same goes for the optional `watchmode_key` (free, watchmode.com; makes picks open the title's page): theirs, secret, only in `config.properties`, or sent to the TV in Home Settings > Watchmode key.
    And for `plex_url` and `plex_token` (Google TV only; their Plex server's newest titles join the picks): the token opens
    their Plex account, so suggest a Plex Home managed user's (the README says how), and it goes only in `config.properties`.
    The optional Immich key (with `immich_server`, their own Immich server: My Photos come from it) is even more theirs:
@@ -127,7 +127,10 @@ stays, and Free My TV opens with a long press of a number key.
 5. **Install:** the first time needs the TV's passphrase, typed by them: ask them to run
    `python3 webos/install.py <IP>` in their own terminal (yours can't answer its prompt, and the passphrase doesn't go
    in the chat). It keeps the unlocked key in `~/.ssh/freemytv_webos_<IP>` (dots as underscores), so later updates
-   run from your terminal with the same command.
+   run from your terminal with the same command. On a TV that isn't 4K (`getSystemInfo` says `"UHD":"false"`), it
+   changes the package's `resolution` to 1280x720 before copying it: LG's Full HD and HD sets draw apps at that size,
+   and a 2019 HD one (webOS 3.9) showed a 1920x1080 app in its top-left two thirds (#402). `--1080p` installs it as
+   built; `python3 webos/build.py --hd` builds it at 1280x720.
 6. **Tell them:** while Free My TV is open, holding a number key pins it to that key (on a remote without number keys,
    it's in LG's app list on the home screen). Developer Mode lasts about 40 days; *EXTEND* in that app renews it (if
    it runs out, the TV removes developer apps, and installing again brings it back). `--uninstall` removes Free My TV.
@@ -177,7 +180,8 @@ Developer Mode; Samsung's home screen stays. Two ways:
    when the TV says `install completed` (`cmd_ret:0` comes after failures too). `--uninstall` removes
    it; some TVs' sdbd doesn't answer that, and then it's removed on the TV (Apps, Settings, Free My TV, Delete).
    A bare `install failed[118]` (Tizen 2.4 gives no reason) can be a copy left by an earlier failed install, signed
-   with another certificate and not shown on the TV: `--uninstall`, then install again (a 2016 KU6640, #349). Still
+   with another certificate and not shown on the TV: `--uninstall`, then install again (2016 KU6640 and KU6400, #349;
+   the KU6400 took the Tizen certificate after that, while a Samsung one, Public with its DUID, kept getting 118). Still
    118 after that, for a package id the TV has never seen and from Samsung's own `tizen install` with an install
    permit: the model refuses developer installs (a 2016 Full HD K5670, `16_HAWKM_FHD`, #349), so suggest a Google TV
    streamer on HDMI.
@@ -310,6 +314,8 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   port and token, one POST, 5 minutes, and only while that screen shows) behind a QR code (`Qr`, byte mode, level M, after
   Project Nayuki's MIT encoder, whose notice stays in the file), and checks a key with TMDB (`/configuration`) before
   saving it. Never log it. Nothing may escape KeyPage's threads: `:home`'s watchdog counts it as a home screen crash.
+  The Watchmode key has the same screen and page (`Prefs.watchmodeKey`, read through `Recs.watchmodeKey()`, checked with
+  `/status/`), on Google TV and Android TV only.
   On LG and Samsung it's typed in Home Settings (no QR: a web app can't serve a page): `Prefs.tmdbKey()` (localStorage)
   wins over `CONFIG.tmdbKey`, and `Data.keyChanged()` fetches the picks again.
 - Continue Watching gets `READ_TV_LISTINGS` with `pm grant` through the TV's own ADB only when picked in Home Settings;
@@ -476,6 +482,15 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   It unbinds itself as soon as it connects (the permission is all it's for), and the home screen and the screensaver
   watch the sessions only while they show. The line is cut to fit when the title changes, never while drawing; the
   home screen's bars bounce again only for a new title (`Watch.title`), and TalkBack announces it then.
+- *At power-on* (Home Settings, `Prefs.powerOn()`: `tv`, the default, `home` or `live`; #396, #346) acts only after a
+  full start, never on a wake from standby. `HomeActivity` keeps the uptime of the first time the home screen came up
+  in this start (`HomeMode.noteHomeShown`, the file `home-shown` with `Settings.Global.BOOT_COUNT`). `live`: 10 s later,
+  if no key reached our window and it's still in front, it opens Live TV as the button does. `home`: a `POWER_ON` job
+  10 s after boot, for up to a minute, sends the HOME intent through the TV's ADB when an app of `LIVE_TV_APPS` is in
+  front and `dumpsys power`'s last user activity (`mLastUserActivityTime`; `lastUserActivityTime` per display group on
+  Android 14) is still older than that uptime (a key moves it; a Changhong on
+  MediaTek stamped it once at 23 s, Home came up at 26 s and its TV center took the screen at 27 s). An unreadable
+  stamp counts as a key: nothing moves.
 - *Status icons* (Home Settings, off by default): Wi-Fi or Ethernet, Bluetooth audio (A2DP and headset only: a
   Bluetooth remote is always connected) and a mounted removable drive. Nothing listens while the row is off; Android
   12+ asks for `BLUETOOTH_CONNECT` (*Nearby devices*) when it's turned on, and without it only that icon is missing.

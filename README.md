@@ -52,6 +52,20 @@ van 1280 × 720 en posters van 780 × 1170, in plaats van een uitvergrote miniat
 
 De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
 
+## Nieuwe bediening uit Free My TV
+
+Op Android en Google TV kun je **OK ingedrukt houden op een bovenste knop** om die met links/rechts te
+verplaatsen. OK bewaart de volgorde; Terug annuleert. De profielknop blijft rechts staan.
+Via **Top Buttons → App Store** kun je Google Play of de Amazon Appstore toevoegen, als die beschikbaar is.
+
+In de startscherminstellingen kun je de **Watchmode-sleutel** via een QR-code of met de afstandsbediening
+invoeren, en onder **Picks → Cartoons and anime** animatiefilms en anime aan- of uitzetten voor de TMDB-tips.
+**At power-on** kiest tussen de keuze van de tv, het startscherm of Live TV na volledig opstarten;
+ontwaken uit standby blijft zoals het was.
+
+Op LG kunnen TMDB-tips via **Open picks in → Nuvio** direct op hun titelpagina openen. AIO-titels blijven
+Wholphin gebruiken. De LG-installatie past de schermresolutie automatisch aan voor HD- en Full HD-tv's.
+
 ## Profielen (Android en Google TV)
 
 De profielafbeelding rechtsboven opent de profielkeuze. Via **Profielen beheren** kun je profielen toevoegen,

@@ -22,8 +22,11 @@ if [ "$what" = all ] || [ "$what" = android ]; then
   bash tools/check-watch-next.sh
   bash tools/check-photo-collage.sh
   bash tools/check-immich-source.sh
+  bash tools/check-key-pages.sh
   bash tools/check-aio-pairing.sh
   bash tools/check-aio-library.sh
+  bash tools/test-order.sh
+  bash tools/check-recs-services.sh
 fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then

@@ -234,6 +234,13 @@ final class Prefs {
 
     static void setCards(int n) { put("cards", n); }
 
+    /** Cartoons and anime out of the picks (Home Settings > Picks): hide_animation in config.properties until changed here. */
+    static boolean hideAnimation() {
+        return sp().getBoolean("hideAnimation", Config.HIDE_ANIMATION);
+    }
+
+    static void setHideAnimation(boolean hide) { put("hideAnimation", hide); }
+
     // MARK: - Picks from
 
     private static String offList;
@@ -257,11 +264,28 @@ final class Prefs {
         return offList;
     }
 
+    /** A service found by its app's name is keyed by its package, and is off until switched on. */
+    private static boolean byName(String key) {
+        return key.indexOf('.') >= 0;
+    }
+
+    private static String onServices() {
+        String saved = sp().getString("servicesOn", "");
+        return saved.isEmpty() ? "," : "," + saved + ",";
+    }
+
     static boolean serviceOff(String key) {
-        return key != null && offServices().contains("," + key + ",");
+        if (key == null) return false;
+        return byName(key) ? !onServices().contains("," + key + ",") : offServices().contains("," + key + ",");
     }
 
     static void setServiceOff(String key, boolean off) {
+        if (byName(key)) {
+            String on = onServices().replace("," + key + ",", ",");
+            if (!off) on += key + ",";
+            put("servicesOn", on.length() > 1 ? on.substring(1, on.length() - 1) : "");
+            return;
+        }
         String list = offServices();
         list = off ? (serviceOff(key) ? list : list + key + ",") : list.replace("," + key + ",", ",");
         put("servicesOff", list.length() > 1 ? list.substring(1, list.length() - 1) : "");
@@ -373,6 +397,19 @@ final class Prefs {
     }
 
     static void setRecents(String v) { put("recents", v); }
+
+    /**
+     * After the TV starts from off, never from standby (Home Settings > At power-on, #396 and #346): "tv" (the TV's
+     * choice), "home" (ours, where a TV app takes the screen at boot) or "live" (Live TV, where the TV starts on ours).
+     */
+    static final String[] POWER_ON = {"tv", "home", "live"};
+
+    static String powerOn() {
+        String v = sp().getString("powerOn", "tv");
+        return v.equals("home") || v.equals("live") ? v : "tv";
+    }
+
+    static void setPowerOn(String v) { put("powerOn", v); }
 
     // MARK: - Widgets and coins
 
@@ -581,6 +618,14 @@ final class Prefs {
         return e;
     }
 
+    /** The Watchmode key given on the TV, or "": then config.properties' one (Recs.watchmodeKey). Never logged. */
+    static String watchmodeKey() { return app == null ? "" : sp().getString("watchmodeKey", "").trim(); }
+
+    static void setWatchmodeKey(String key) {
+        sp().edit().putString("watchmodeKey", key).commit();
+        version++;
+    }
+
     // MARK: - Shelf
 
     /** Packages on the home shelf, in order; null until the user edits it (then the built-in list applies). */
@@ -624,8 +669,8 @@ final class Prefs {
     // MARK: - Top buttons
 
     /**
-     * The round buttons at the top right, in order: "live", "inputs" and/or "settings". null until the user edits
-     * them (then HomeApps.TOP_DEFAULT applies); empty when they took all three off.
+     * The round buttons at the top right, in order (HomeApps.TOP_ALL). null until the user edits
+     * them (then HomeApps.TOP_DEFAULT applies); empty when they took them all off.
      */
     static List<String> topButtons() {
         String v = sp().getString("topButtons", null);

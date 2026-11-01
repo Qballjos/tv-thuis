@@ -87,6 +87,8 @@ var Prefs = (function () {
       return t === 'continue' || t === 'none' || t === 'aio' ? t : 'picks';
     },
     cards: function () { var n = pick('cards', 25); return n < 25 ? 25 : n > 40 ? 40 : n; },
+    /** Cartoons and anime out of the picks (Home Settings), or config.properties' hide_animation. */
+    hideAnimation: function () { return pick('hideAnimation', CONFIG.hideAnimation === true) === true; },
     shelf: function () { return pick('shelf', null); },
     /** The shelf_apps of the build that last set the shelf, so a new one wins once over the TV's choice. */
     shelfConfig: function () { return pick('shelfConfig', ''); },
@@ -118,6 +120,7 @@ var Prefs = (function () {
       if (off) list.push(key);
       this.set('servicesOff', list);
     },
+    openPicks: function () { return pick('openPicks', CONFIG.openPicksIn === 'nuvio' ? 'nuvio' : 'apps'); },
     set: function (name, value) { v[name] = value; save(); this.version++; },
     setCoin: function (i, on) {
       var c = (pick('coins', null) || [true, true, true, true]).slice();
@@ -418,7 +421,7 @@ var Data = (function () {
   }
 
   function sourceStamp() {
-    var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (CONFIG.hideAnimation ? ':no-animation' : '')
+    var s = KEY.length + ':' + KEY.slice(-6) + ':' + REGION + (Prefs.hideAnimation() ? ':no-animation' : '')
         + ':' + Prefs.aioUrl() + ':' + Prefs.aioUser() + ':' + Prefs.jellyfinUrl() + ':' + hash(Prefs.jellyfinKey()) + ':art';
     for (var i = 0; i < SERVICES.length; i++) s += usable(SERVICES[i][1]) ? '1' : '0';
     return s;
@@ -616,7 +619,7 @@ var Data = (function () {
     });
   }
 
-  /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with hide_animation=true. */
+  /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with Cartoons and anime off. */
   var ANIMATION = 16;
 
   function animated(o) {
@@ -626,7 +629,7 @@ var Data = (function () {
 
   function addPick(list, o, kind) {
     if (!o.backdrop_path) return;
-    if (CONFIG.hideAnimation && animated(o)) return;
+    if (Prefs.hideAnimation() && animated(o)) return;
     list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, poster: o.poster_path || '', meta: '', app: null, detailed: false});
   }
 
@@ -952,7 +955,7 @@ var Data = (function () {
       if (!ids.length) { done(new Error("none of the TV's streaming apps are on TMDB (or switched on in Picks from)")); return; }
       var common = '&language=' + lang() + '&watch_region=' + REGION + '&with_watch_monetization_types=flatrate&include_adult=false'
           + '&sort_by=popularity.desc&with_watch_providers=' + encodeURIComponent(ids.join('|'))
-          + (CONFIG.hideAnimation ? '&without_genres=' + ANIMATION : '');
+          + (Prefs.hideAnimation() ? '&without_genres=' + ANIMATION : '');
       var hot = {movie: [], tv: []}, fresh = {movie: [], tv: []};
       each(['movie', 'tv'], function (kind, next) {
         tmdb('/trending/' + kind + '/week?language=' + lang(), function (e, r) {

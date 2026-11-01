@@ -837,6 +837,8 @@
         step: function (d) { cycle('saver', ['photos', 'clock'], saverMode(), d); }},
       {label: tr('Picks per tab'), value: String(Prefs.cards()),
         step: function (d) { Prefs.set('cards', 25 + (Prefs.cards() - 25 + (d || 1) + 16) % 16); renderCards(); }},
+      {label: tr('Cartoons and anime'), toggle: !Prefs.hideAnimation(),
+        step: function () { Prefs.set('hideAnimation', !Prefs.hideAnimation()); Data.refresh(); }},
       {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
         step: function () { Prefs.set('saverWatch', !Prefs.saverWatch()); }},
       {label: tr('Request button'), value: saverButtonName(),
@@ -874,6 +876,11 @@
             step: function () { Prefs.setServiceOff(key, !Prefs.serviceOff(key)); Data.refresh(); Data.settingsChanged(); }});
         })(sv[j].key, sv[j].name);
       }
+    }
+    if (nuvio()) {
+      var open = Prefs.openPicks();
+      rows.push({label: tr('Open picks in'), value: open === 'nuvio' ? 'Nuvio' : tr('Streaming apps'),
+        step: function (d) { cycle('openPicks', ['apps', 'nuvio'], open, d); }});
     }
     rows.push({label: tr('Shelf'), value: '›', shelf: true, step: function (d) { if (d >= 0) openShelfEdit(); }});
     rows.push({label: tr('About this TV'), value: '›', about: true, step: function (d) { if (d >= 0) openAbout(); }});
@@ -1440,9 +1447,30 @@
 
   // MARK: - Opening things
 
-  function launcher(id, name) {
+  /** Nuvio, when the TV has it: picks can open on its page there (Home Settings, Open picks in). LG only for now:
+   *  Samsung's launch passes no data, so Nuvio would open on its Home. */
+  function nuvio() {
+    if (TV.name !== 'webos') return null;
+    for (var i = 0; i < apps.length; i++) if (/nuvio/i.test(apps[i].id) || /^nuvio\b/i.test(apps[i].title)) return apps[i];
+    return null;
+  }
+
+  function pickTarget(p) {
+    if (!p) return null;
+    if (p.aio) {
+      var player = !p.canRequest && playerApp();
+      return player ? {app: player, params: null} : null;
+    }
+    var via = Prefs.openPicks() === 'nuvio' ? nuvio() : null;
+    var app = via || Data.appFor(p.app);
+    if (!app) return null;
+    // Nuvio's own link for the title, as on Android (nuvio://tmdb/movie/603); webOS apps get links as contentTarget.
+    return {app: app, params: via ? {contentTarget: 'nuvio://tmdb/' + (p.kind === 'tv' ? 'series' : 'movie') + '/' + p.id} : null};
+  }
+
+  function launcher(id, name, params) {
     return function () {
-      TV.launch(id, null, function (ok) {
+      TV.launch(id, params || null, function (ok) {
         if (!ok) toast(trf("Couldn't open {app}.", {app: name || id}));
       });
     };
@@ -1482,8 +1510,8 @@
           else toast(tr('Install Wholphin to play this.'));
           return;
         }
-        var app = p && Data.appFor(p.app);
-        if (app) launcher(app.id, app.title)();
+        var target = pickTarget(cards[st.card]);
+        if (target) launcher(target.app.id, target.app.title, target.params)();
         return;
       case Z.SHELF:
         if (shelf[st.shelf]) launcher(shelf[st.shelf].id, shelf[st.shelf].title)();
@@ -1749,7 +1777,8 @@
       back.style.webkitTransform = back.style.transform = 'scale(1.0)';
       clock.children[3].textContent = p.title;
       saverPick = p;
-      var app = Prefs.saverWatch() && Data.appFor(p.app);
+      var target = Prefs.saverWatch() ? pickTarget(p) : null;
+      var app = target && target.app;
       var button = saverButtonName();
       hint.textContent = p.canRequest
         ? trf('Press {button} to request · ← → for another', {button: button})
@@ -1832,9 +1861,9 @@
     idleAt = Date.now();
     if (ambientOn) { hideAmbient(); return true; }
     if (!saverOn) return false;
-    var app = ok && saverPick && Prefs.saverWatch() && Data.appFor(saverPick.app);
+    var target = ok && Prefs.saverWatch() ? pickTarget(saverPick) : null;
     hideSaver();
-    if (app) launcher(app.id, app.title)();
+    if (target) launcher(target.app.id, target.app.title, target.params)();
     return true;
   }
 

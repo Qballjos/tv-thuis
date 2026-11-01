@@ -13,6 +13,7 @@ MAP = {
     "thunderstorm": ("thunderstorm", 1), "snowflake": ("ac_unit", 0),
     "tv": ("tv", 0), "gamepad": ("sports_esports", 1), "hdmi": ("settings_input_hdmi", 1),
     "apps": ("apps", 1), "settings": ("settings", 1), "speaker": ("speaker", 1),
+    "store": ("shopping_bag", 0),
     "sparkles": ("auto_awesome", 1), "bedtime": ("bedtime", 1), "home": ("home", 1),
     "chevron_right": ("chevron_right", 0), "bell": ("notifications", 1), "sync": ("sync", 0),
     "check": ("check", 0), "play": ("play_arrow", 1), "tv_settings": ("display_settings", 1),
