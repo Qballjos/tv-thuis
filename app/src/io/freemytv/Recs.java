@@ -1234,7 +1234,7 @@ final class Recs {
         for (String[] s : SERVICES) {
             // Apple TV: only the streaming service (TMDB provider 350); provider 2 is the Apple TV Store (rent or buy).
             if (s[1].equals("appletv") && providerId != 350) continue;
-            if (!(s[0].equals("max") ? n.matches(".*\\bmax\\b.*") : WHOLE_NAME.contains(s[0]) ? n.equals(s[0]) : n.contains(s[0]))) continue;
+            if (!(s[0].equals("max") ? ServiceNames.max(n) : WHOLE_NAME.contains(s[0]) ? n.equals(s[0]) : n.contains(s[0]))) continue;
             if (installed(s[2])) return s;
             if (first == null) first = s;
         }
@@ -1327,7 +1327,7 @@ final class Recs {
                     // that link opens Amazon or Apple's app, not the one the pick is for.
                     boolean resold = name.contains("channel") || name.contains("(via");
                     // Max as a word, as for TMDB's providers: Watchmode calls it "HBO Max" again, and Cinemax isn't it.
-                    boolean same = !resold && (want.equals("max") ? words.matches(".*\\bmax\\b.*")
+                    boolean same = !resold && (want.equals("max") ? ServiceNames.max(words)
                             : WHOLE_NAME.contains(want) ? name.equals(want) : name.contains(want));
                     if (same && s.optString("type").equals("sub") && s.optString("web_url").startsWith("https://")) link = s.optString("web_url");
                 }
