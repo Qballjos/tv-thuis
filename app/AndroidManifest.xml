@@ -28,6 +28,10 @@
          returns null). The shelf and streaming apps, the live TV apps and, through the <intent>, every TV app
          (for "All Apps"). -->
     <queries>
+        <package android:name="com.github.damontecres.wholphin" />
+        <package android:name="com.github.damontecres.wholphin.debug" />
+        <package android:name="org.jellyfin.androidtv" />
+        <package android:name="org.jellyfin.androidtv.firetv" />
         <!-- Optional App Store top button: Google Play or Amazon Appstore. -->
         <package android:name="com.android.vending" />
         <package android:name="com.amazon.venezia" />

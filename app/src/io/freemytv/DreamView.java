@@ -297,6 +297,8 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     /** An explicit album never falls back to unrelated art while loading or empty; own photos also win over AIO. */
     private List<Recs.Pick> photos() {
+        if ("aio".equals(Prefs.saverSource())) return recs.aioShowcase();
+        if ("immich".equals(Prefs.saverSource())) return Photos.picks(getContext(), Photos.saverFiles(getContext()));
         if (Prefs.photos() && "album".equals(Prefs.photoSource())) return Photos.picks(getContext());
         return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
     }
@@ -374,7 +376,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     private Bitmap[] loadImages(Recs.Pick pick, File file, float[] light) throws java.io.IOException {
         if (pick.photo != null && Prefs.saverCollage()) {
-            Bitmap image = PhotoCollage.render(Photos.files(getContext()), file,
+            Bitmap image = PhotoCollage.render(Photos.saverFiles(getContext()), file,
                     Math.min(PW, Backdrop.W), Math.min(PH, Backdrop.H), Ui.locale());
             return new Bitmap[] {Backdrop.gpu(image), null};
         }
@@ -812,7 +814,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
                     .setIncludePad(false).build();
             float originY = titleBase - t.getLineBaseline(t.getLineCount() - 1);
             float capTop = originY + t.getLineBaseline(0) - Ui.cap(titlePaint);
-            c.drawText(s.pick.aio ? Ui.tr("TRENDING") : Recs.periodLabel(), x, capTop - 30 * k, labelPaint);
+            c.drawText(s.pick.aio ? (s.pick.recent ? Ui.tr("Recently added") : Ui.tr("Trending")) : Recs.periodLabel(), x, capTop - 30 * k, labelPaint);
             c.save();
             c.translate(x - Ui.leftBearing(titlePaint, title), originY);
             t.draw(c);

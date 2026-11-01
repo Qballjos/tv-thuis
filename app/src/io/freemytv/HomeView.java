@@ -427,6 +427,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final long APPS_MAX_AGE_MS = 15 * 60_000;
     private final LauncherApps launcherApps;
     private final Bitmap profileAvatar;
+    private final Paint avatarPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private boolean appsStale = true;
     private int appsVersion, appsGeneration;
     private long appsAt;
@@ -815,7 +816,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int mode = aioTabs() ? 1 : 0;
         if (tabsGeneration != Ui.generation || tabsMode != mode) {
             tabs = mode == 1
-                    ? new String[] {Ui.tr("Continue watching"), Ui.tr("Recently added"), Ui.tr("Movies"), Ui.tr("Shows"), Ui.tr("TRENDING")}
+                    ? new String[] {Ui.tr("Continue watching"), Ui.tr("Recently added"), Ui.tr("Movies"), Ui.tr("Shows"), Ui.tr("Trending")}
                     : new String[] {Ui.tr("Explore"), Ui.tr("Movies"), Ui.tr("Shows")};
             tabsGeneration = Ui.generation;
             tabsMode = mode;
@@ -4887,7 +4888,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (it.kind == HomeApps.PROFILES) {
                 tmp.set(cell);
                 tmp.inset(5 * k, 5 * k);
-                c.drawBitmap(profileAvatar, null, tmp, imagePaint);
+                c.drawBitmap(profileAvatar, null, tmp, avatarPaint);
             } else Symbols.draw(getContext(), c, it.symbol, cell.centerX(), cell.centerY(), 27 * k * s, ink);
             if (f > 0.01f) {
                 String label = it.label;

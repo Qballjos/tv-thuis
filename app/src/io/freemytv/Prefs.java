@@ -322,6 +322,12 @@ final class Prefs {
     static boolean saverWatch() { return sp().getBoolean("saverWatch", false); }
     static void setSaverWatch(boolean on) { put("saverWatch", on); }
 
+    static String saverSource() {
+        String source = sp().getString("saverSource", "auto");
+        return "aio".equals(source) || "immich".equals(source) ? source : "auto";
+    }
+    static void setSaverSource(String source) { put("saverSource", source); }
+
     static boolean saverCollage() { return sp().getBoolean("saverCollage", false); }
     static void setSaverCollage(boolean on) { put("saverCollage", on); }
 

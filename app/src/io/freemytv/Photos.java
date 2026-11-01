@@ -104,10 +104,21 @@ final class Photos {
     }
 
     /** For the screensaver: the photos as picks (no title, no caption). */
-    static List<Recs.Pick> picks(Context c) {
-        List<Recs.Pick> out = new ArrayList<>();
-        if (!on(c)) return out;
+    static List<File> saverFiles(Context c) {
         List<File> list = files(c);
+        if (!"immich".equals(Prefs.saverSource())) return list;
+        List<File> selected = new ArrayList<>();
+        for (File file : list) if (file.getName().endsWith(ImmichSource.PHOTO_END)) selected.add(file);
+        return selected;
+    }
+
+    static List<Recs.Pick> picks(Context c) {
+        return picks(c, files(c));
+    }
+
+    static List<Recs.Pick> picks(Context c, List<File> list) {
+        List<Recs.Pick> out = new ArrayList<>();
+        if (!Prefs.photos()) return out;
         for (int i = 0; i < list.size(); i++) {
             Recs.Pick p = new Recs.Pick();
             p.kind = "photo";

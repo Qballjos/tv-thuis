@@ -20,6 +20,9 @@ public final class WatchNextTest {
     }
 
     public static void main(String[] args) {
+        check(WatchNext.engagementMillis(1_700_000_000L) == 1_700_000_000_000L, "Wholphin seconds must sort alongside millisecond timestamps");
+        check(WatchNext.engagementMillis(1_700_000_000_000L) == 1_700_000_000_000L, "Android milliseconds stay unchanged");
+        check(WatchNext.engagementMillis(0) == 0, "Missing engagement remains unknown");
         List<WatchNext.Item> source = Arrays.asList(
                 item("netflix", "Older", 1), item("netflix", "Newest", 8),
                 item("netflix", "Newest", 7), item("netflix", "Next", 6),

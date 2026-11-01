@@ -74,6 +74,9 @@ public final class ProfilesTest {
         check(!profiles.select("../../settings"), "Unknown profile must not become a filename");
         check(!profiles.remove(Profiles.FIRST), "The last profile must remain available");
 
+        String quiet = profiles.add("Quiet", "quiet-slate");
+        check(quiet != null && profiles.avatar(quiet).equals("quiet-slate"), "Quiet avatars must survive saving");
+        check(profiles.remove(quiet), "Quiet-avatar profile can be removed safely");
         String kids = profiles.add("Kids", "robot");
         check(kids != null && profiles.select(kids), "New profile must be selectable");
         check(profiles.avatar(kids).equals("robot"), "Chosen avatar was not saved");

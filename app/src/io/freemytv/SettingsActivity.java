@@ -547,7 +547,7 @@ public class SettingsActivity extends Activity {
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
                 case SHELF_EDIT: return Math.min(PICK_VISIBLE, shelfRows.size());
                 case POWER: return powerRows().length;
-                case SAVER: return 5;
+                case SAVER: return 6;
                 case TMDB_KEY: return keyRowIds.length;
                 case PICKS: return picksLabels().length;
                 case PICK_FROM: return Math.min(PICK_VISIBLE, services.size());
@@ -1335,7 +1335,7 @@ public class SettingsActivity extends Activity {
         private String[] listLabels() {
             if (screen == AIO) return aioLabels();
             if (screen == SAVER) return new String[] {Ui.tr("Screensaver"), Ui.tr("Starts after"),
-                    Ui.tr("Request button"), Ui.tr("Photo layout"), Ui.tr("Preview")};
+                    Ui.tr("Request button"), Ui.tr("Photo layout"), Ui.tr("Screensaver source"), Ui.tr("Preview")};
             return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : screen == PICKS ? picksLabels() : settingLabels();
         }
 
@@ -1343,7 +1343,8 @@ public class SettingsActivity extends Activity {
             if (screen == AIO) return aioValues();
             if (screen == SAVER) return new String[] {onOff(saverOn), SleepTimer.duration(saverAfter / 60_000),
                     pickSaverKey ? Ui.tr("Press the button. Back cancels.") : Prefs.saverButtonName(),
-                    Prefs.saverCollage() ? Ui.tr("Photo collage") : Ui.tr("Full screen"), "›"};
+                    Prefs.saverCollage() ? Ui.tr("Photo collage") : Ui.tr("Full screen"),
+                    "aio".equals(Prefs.saverSource()) ? "AIO" : "immich".equals(Prefs.saverSource()) ? "Immich" : Ui.tr("Automatic"), "›"};
             return screen == REMOTE_KEYS ? keyValues() : screen == POWER ? powerValues() : screen == PICKS ? picksValues() : settingValues();
         }
 
@@ -1493,6 +1494,18 @@ public class SettingsActivity extends Activity {
                 return;
             }
             if (screen == SAVER) {
+                if (focus == 4) {
+                    String[] sources = {"auto", "aio", "immich"};
+                    int at = java.util.Arrays.asList(sources).indexOf(Prefs.saverSource());
+                    String source = sources[(at + dir + sources.length) % sources.length];
+                    Prefs.setSaverSource(source);
+                    if ("immich".equals(source)) {
+                        if ("default".equals(Prefs.photoSource())) Prefs.setPhotoSource("immich", "", "");
+                        Prefs.setPhotos(true);
+                        ImmichPhotos.sourceChanged(getContext());
+                    }
+                    return;
+                }
                 if (focus == 3) {
                     Prefs.setSaverCollage(!Prefs.saverCollage());
                     return;
@@ -2797,7 +2810,7 @@ public class SettingsActivity extends Activity {
             } else if (screen == POWER) {
                 activatePower();
             } else if (screen == SAVER) {
-                if (focus == 4) {
+                if (focus == 5) {
                     pause();
                     activity.showPreview();
                 } else if (focus == 2) {

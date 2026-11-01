@@ -274,6 +274,9 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   AIO home tabs are Resume, Recent, Movies (owned library), Shows (owned library), Trending (requestable picks).
   Library pages append by stable item ID as focus nears the end; never apply recommendation/franchise limits to them.
   Prepare only nearby card artwork and grow card springs/bounds outside drawing when pages append.
+  Recent rows sort by parsed addition date (ISO or Unix, newest first), never hourly rotation or franchise limits.
+  Resume refreshes separately every minute. Older AIO poster-only trending rows may use the existing TMDB key for
+  landscape art; failed or undecodable landscape downloads must fall back to the poster.
   `AioHttp` keeps HTTPS certificate checks and disables credential redirects. Runtime plain HTTP is pinned to private
   IPv4 addresses at the socket boundary; never relax global `network_security_config` for arbitrary hosts.
 
@@ -357,7 +360,9 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   outside album mode); untagged legacy caches stay hidden. A stale sync cannot mark a new album fresh or re-enable
   photos. `tools/photos.py`'s are never deleted. Redirects are never followed (`x-api-key` would go
   along to another host).
-- Screensaver's `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
+- Screensaver's `Screensaver source` is per profile (`auto`, `aio`, `immich`): explicit sources never fall back to
+  other sources; empty/loading sources use the clock. Immich's collage uses the same filtered collection.
+  `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
   An empty/loading selected album uses the clock fallback, never other photos or movie art.
   `PhotoCollage` prepares up to three framed photos on the worker; the existing slideshow handles fades and keys.
   Imports retain the full aspect ratio and capture date only (no GPS); older cropped copies still work.

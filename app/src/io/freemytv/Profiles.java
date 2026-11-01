@@ -19,7 +19,8 @@ final class Profiles {
     static final List<String> AVATARS = Collections.unmodifiableList(Arrays.asList(
             "person", "fox", "cat", "robot", "astronaut", "owl", "panda", "rocket",
             "dog", "lion", "bear", "rabbit", "frog", "koala", "penguin", "tiger",
-            "monkey", "unicorn", "dinosaur", "alien", "ninja", "pirate", "star", "gamepad", "rainbow"));
+            "monkey", "unicorn", "dinosaur", "alien", "ninja", "pirate", "star", "gamepad", "rainbow",
+            "quiet-slate", "quiet-stone", "quiet-moon", "quiet-mountain", "quiet-leaf", "quiet-rings"));
     private final SharedPreferences registry;
     private final Function<String, SharedPreferences> files;
     private final String firstName;
