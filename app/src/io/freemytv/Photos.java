@@ -3,9 +3,7 @@ package io.freemytv;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.BitmapRegionDecoder;
 import android.graphics.Matrix;
-import android.graphics.Rect;
 import android.media.ExifInterface;
 import android.os.Build;
 import android.os.Handler;
@@ -42,6 +40,19 @@ final class Photos {
     static final int MAX = 100;
     /** Smaller ones are icons and thumbnails, not photos. */
     private static final int MIN_SIDE = 640;
+    /**
+     * Filling the screen may cut this much of a photo's height or width at most: 3:2 (16%) and 4:3 (25%) fill, as
+     * do 21:9 (24%) and 2:1 (11%); a 1:1 (44%), a portrait (3:4: 58%) or a phone's panorama (3:1: 41%) is shown whole.
+     */
+    private static final float MAX_CUT = 0.30f;
+
+    /** Whether a w × h photo fills the screen (cropped, with the slow zoom) rather than shown whole on black. */
+    static boolean fills(int w, int h) {
+        if (w <= 0 || h <= 0) return true;
+        float photo = (float) w / h, screen = (float) W / H;
+        float cut = photo < screen ? 1 - photo / screen : 1 - screen / photo;
+        return cut <= MAX_CUT;
+    }
 
     private static File dir(Context c) {
         return new File(c.getFilesDir(), "photos");
@@ -333,9 +344,13 @@ final class Photos {
     }
 
     /**
-     * The whole photo upright (EXIF), fitted within w × h without upscaling; null if too small or unreadable.
-     * Keep portrait photos intact for the collage; fullscreen callers still crop when they draw. Decode subsampled,
-     * then scale and turn once, so a large original never stays in memory at its original resolution.
+     * The whole photo upright (EXIF), never cropped, so the look can change later without a new import: one that fills()
+     * is sized to cover w × h (the screensaver crops it to the screen, with the slow zoom), a portrait or a panorama is
+     * fitted inside w × h (shown whole, on black). A smaller photo is enlarged to that size too (a preview, a phone's
+     * screenshot). Null if too small or unreadable. Decoded from a FileDescriptor (the path form copies all of the file
+     * into memory first) and straight at its final size: halved while it stays larger, then scaled by the decoder itself
+     * (inDensity / inTargetDensity): a 24 MP photo is decoded at 3000 × 2000 (24 MB) and scaled into the result in the
+     * same call. Only that is turned.
      */
     private static Bitmap decode(File f, int w, int h) throws IOException {
         BitmapFactory.Options bounds = new BitmapFactory.Options();
@@ -345,53 +360,31 @@ final class Photos {
         if (Math.min(bounds.outWidth, bounds.outHeight) < MIN_SIDE) return null;
         int degrees = rotation(f);
         boolean sideways = degrees == 90 || degrees == 270;
-        // Size in the stored orientation, then turn the scaled result upright.
-        float scale = Math.min(1, Math.min((float) (sideways ? h : w) / bounds.outWidth,
-                (float) (sideways ? w : h) / bounds.outHeight));
-        int tw = Math.max(1, Math.round(bounds.outWidth * scale)), th = Math.max(1, Math.round(bounds.outHeight * scale));
-        int cw = bounds.outWidth, ch = bounds.outHeight;
-        Rect band = new Rect(0, 0, cw, ch);
+        // The size it ends at, upright, then the same in the file's stored orientation
+        int uw = sideways ? bounds.outHeight : bounds.outWidth, uh = sideways ? bounds.outWidth : bounds.outHeight;
+        float sx = (float) w / uw, sy = (float) h / uh;
+        float scale = fills(uw, uh) ? Math.max(sx, sy) : Math.min(sx, sy);
+        int tw = Math.max(1, Math.round(uw * scale)), th = Math.max(1, Math.round(uh * scale));
+        int sw = sideways ? th : tw, sh = sideways ? tw : th;
         BitmapFactory.Options opts = new BitmapFactory.Options();
         opts.inSampleSize = 1;
-        // Sample near the final size, with at most 10% upscaling from the sampled pixels.
-        while (cw / (opts.inSampleSize * 2) >= tw * 0.9f && ch / (opts.inSampleSize * 2) >= th * 0.9f) opts.inSampleSize *= 2;
-        Bitmap src = null;
-        Rect from;
-        // From a FileDescriptor, which maps the file: the path form copies all of it into memory (8–12 MB for a 24 MP
-        // JPEG).
+        while (bounds.outWidth / (opts.inSampleSize * 2) >= sw && bounds.outHeight / (opts.inSampleSize * 2) >= sh) {
+            opts.inSampleSize *= 2;
+        }
+        opts.inScaled = true;
+        opts.inDensity = Math.max(1, bounds.outWidth / opts.inSampleSize);
+        opts.inTargetDensity = sw;
+        Bitmap src;
         try (FileInputStream in = new FileInputStream(f)) {
-            BitmapRegionDecoder region = BitmapRegionDecoder.newInstance(in.getFD(), false);
-            try {
-                src = region.decodeRegion(band, opts);
-            } finally {
-                region.recycle();
-            }
-        } catch (IOException | RuntimeException e) {
-            AppLog.w("photos: " + f.getName() + " read whole: " + e.getMessage());
+            src = BitmapFactory.decodeFileDescriptor(in.getFD(), null, opts);
         }
-        if (src != null) {
-            from = new Rect(0, 0, src.getWidth(), src.getHeight());
-        } else {
-            // Whole, sampled to about 4 MP at most, as before: at the band's sample size a sideways 12 MP photo would
-            // take 48 MB, a 20000 × 4000 panorama 80.
-            while ((long) bounds.outWidth * bounds.outHeight > 4_000_000L * opts.inSampleSize * opts.inSampleSize) {
-                opts.inSampleSize *= 2;
-            }
-            src = BitmapFactory.decodeFile(f.getPath(), opts);
-            if (src == null) return null;
-            float sx = (float) src.getWidth() / bounds.outWidth, sy = (float) src.getHeight() / bounds.outHeight;
-            from = new Rect(Math.round(band.left * sx), Math.round(band.top * sy), Math.round(band.right * sx),
-                    Math.round(band.bottom * sy));
-        }
-        Bitmap out = Bitmap.createBitmap(tw, th, Bitmap.Config.ARGB_8888);
-        new android.graphics.Canvas(out).drawBitmap(src, from, new Rect(0, 0, tw, th),
-                new android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG | android.graphics.Paint.DITHER_FLAG));
-        src.recycle();
-        if (degrees == 0) return out;
+        if (src == null) return null;
+        src.setDensity(Bitmap.DENSITY_NONE);
+        if (degrees == 0) return src;
         Matrix m = new Matrix();
         m.setRotate(degrees);
-        Bitmap turned = Bitmap.createBitmap(out, 0, 0, tw, th, m, true);
-        if (turned != out) out.recycle();
+        Bitmap turned = Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), m, true);
+        if (turned != src) src.recycle();
         return turned;
     }
 
