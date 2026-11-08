@@ -2,6 +2,13 @@
 
 Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-thuis)) bovenop Free My TV toevoegt of veranderde. De Android-tv’s installeren een nieuwe versie via **Startscherm → Updates**. De LG krijgt die APK niet; daar blijft een aparte webOS-installatie nodig.
 
+## Nog niet uitgebracht
+
+- Upstream opnieuw samengevoegd na conflicten in vertalingen en fotocode. De AIO-integratie, profielen,
+  Immich-albumfiltering, collage en instelbare screensaverbediening blijven behouden.
+- Eigen portretten, vierkante foto's en panorama's blijven in de schermvullende screensaver helemaal zichtbaar;
+  Immich ververst ook terwijl de screensaver draait. Nieuwe upstreamfuncties en de Slowaakse vertaling zijn overgenomen.
+
 ## 1.3.7
 
 - **Pas toegevoegd** staat op toevoegdatum, nieuwste eerst, zonder wisselende uurvolgorde of verborgen vervolgdelen.

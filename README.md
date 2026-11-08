@@ -108,6 +108,9 @@ In **Startscherm → Schermbeveiliging**:
 | Bron schermbeveiliging | Automatisch, AIO of Immich |
 | Bekijken | Direct de beveiliging tonen |
 
+Bij schermvullende eigen foto's blijven portretten, vierkante foto's en panorama's helemaal zichtbaar op zwart;
+brede foto's vullen het scherm met een rustige zoom. Fotocollage blijft een aparte keuze.
+
 **Bron schermbeveiliging** geldt per profiel. *AIO* toont alleen AIO-afbeeldingen; *Immich* toont alleen
 foto's uit de geselecteerde Immich-verzameling of het gekozen album, ook bij de collage. Een lege of onbereikbare
 gekozen bron toont de klok en haalt geen beelden uit een andere bron. *Automatisch* houdt de bestaande keuze:

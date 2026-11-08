@@ -42,16 +42,18 @@ public final class PhotoCollageTest {
         if (Looper.getMainLooper() == null) Looper.prepareMainLooper();
         Class.forName("android.app.ActivityThread").getMethod("systemMain").invoke(null);
         android.graphics.Typeface.class.getDeclaredMethod("loadPreinstalledSystemFontMap").invoke(null);
+        check(Photos.fills(3840, 2160) && Photos.fills(2400, 1600) && Photos.fills(1600, 1200), "landscapes fill with limited cropping");
+        check(!Photos.fills(1800, 3200) && !Photos.fills(2400, 2400) && !Photos.fills(6000, 1600), "portraits, squares and panoramas stay whole");
         Method decode = Photos.class.getDeclaredMethod("decode", File.class, int.class, int.class);
         decode.setAccessible(true);
-        int[][] shapes = {{1800, 3200}, {3840, 2160}, {2400, 2400}, {3200, 1800}};
+        int[][] shapes = {{1800, 3200}, {3840, 2160}, {2400, 2400}, {3200, 1800}, {2400, 1600}, {6000, 1600}};
         List<File> files = new ArrayList<>();
         for (int i = 0; i < shapes.length; i++) {
             int w = shapes[i][0], h = shapes[i][1];
             File raw = new File(folder, "raw-" + i + ".jpg");
             Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
             Canvas c = new Canvas(b);
-            c.drawColor(new int[] {0xFF659583, 0xFF719CB7, 0xFFB48A67, 0xFF80907B}[i]);
+            c.drawColor(new int[] {0xFF659583, 0xFF719CB7, 0xFFB48A67, 0xFF80907B}[i % 4]);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
             p.setColor(0xFFFFDF9E);
             c.drawCircle(w * .7f, h * .25f, Math.min(w, h) * .16f, p);
@@ -66,7 +68,7 @@ public final class PhotoCollageTest {
             if (i == 3) tags.setAttribute(ExifInterface.TAG_ORIENTATION, "6");
             tags.saveAttributes();
             Bitmap result = (Bitmap) decode.invoke(null, raw, Photos.W, Photos.H);
-            check(result != null && result.getWidth() <= Photos.W && result.getHeight() <= Photos.H, "bounded decode");
+            check(result != null && result.getWidth() <= Photos.W / .7f + 2 && result.getHeight() <= Photos.H / .7f + 2, "bounded decode even when covering the screen");
             double expected = i == 3 ? (double) h / w : (double) w / h;
             check(Math.abs((double) result.getWidth() / result.getHeight() - expected) < .003, "whole aspect and EXIF rotation");
             File imported = new File(folder, "photo-" + i + ".jpg");
