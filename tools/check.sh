@@ -31,6 +31,7 @@ if [ "$what" = all ] || [ "$what" = android ]; then
 fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then
+  python3 tools/test-release-version.py
   python3 tools/translate.py --check
   node tools/test-aio-library.js
   node tools/test-artwork.js

@@ -1,12 +1,13 @@
-# Publishes FreeMyTV.apk on this fork when the version in the manifest is not released yet.
+# Publishes a new APK version after all push checks on main succeed.
 # The TV's update check downloads that file. It is built without config.properties and signed with the
 # key already on the TVs (repository secrets FREEMYTV_KEYSTORE and FREEMYTV_KEYSTORE_PASS).
 name: Release
 
 on:
-  push:
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
     branches: [main]
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,10 +18,16 @@ concurrency:
 
 jobs:
   apk:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository
     name: Publish FreeMyTV.apk
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -33,12 +40,16 @@ jobs:
       - name: Version
         id: version
         run: |
-          name=$(sed -n 's/.*android:versionName="\([^"]*\)".*/\1/p' app/AndroidManifest.xml | head -1)
-          echo "name=$name" >> "$GITHUB_OUTPUT"
-          if gh release view "v$name" >/dev/null 2>&1; then
+          sha=$(git rev-parse HEAD)
+          latest=$(gh release view --json tagName,targetCommitish)
+          target=$(printf '%s' "$latest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["targetCommitish"])')
+          if [ "$target" = "$sha" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "v$name is already released."
+            echo "This commit is already released."
           else
+            tag=$(printf '%s' "$latest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tagName"])')
+            name=$(python3 tools/release-version.py app/AndroidManifest.xml "$tag")
+            echo "name=$name" >> "$GITHUB_OUTPUT"
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
         env:
@@ -65,5 +76,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "v${{ steps.version.outputs.name }}" FreeMyTV.apk \
+            --target "$(git rev-parse HEAD)" \
             --title "${{ steps.version.outputs.name }}" \
             --notes "Free My TV for the TVs at home. Home Settings > Updates installs this file."

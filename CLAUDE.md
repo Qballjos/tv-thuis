@@ -212,6 +212,12 @@ Developer Mode; Samsung's home screen stays. Two ways:
 
 ## Releases
 
+This fork publishes automatically after the `Check` workflow succeeds for a push to `main`. The release workflow
+checks out that exact commit, increments the latest published patch version (or uses a higher source version), and
+sets an increasing Android version code in the build manifest. These generated version values are not committed
+back, avoiding a release loop. Re-running checks for an already published commit does not release it again.
+
+
 Every release carries `FreeMyTV.apk` for Google TV and Android TV, built with `./build.sh --generic` (no
 config.properties: no key, and `Place` takes the city, the currency and the region from the TV's time zone through
 `app/assets/zones.json`) and signed with the project's release key, which lives only on the owner's Mac
