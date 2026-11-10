@@ -67,6 +67,7 @@ De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime
 Op Android en Google TV kun je **OK ingedrukt houden op een bovenste knop** om die met links/rechts te
 verplaatsen. OK bewaart de volgorde; Terug annuleert. De profielknop blijft rechts staan.
 Via **Top Buttons → App Store** kun je Google Play of de Amazon Appstore toevoegen, als die beschikbaar is.
+Op LG- en Samsung-tv's zonder antenne kun je **Startscherm → Live TV** uit de ingangenlijst halen.
 
 In de startscherminstellingen kun je de **Watchmode-sleutel** via een QR-code of met de afstandsbediening
 invoeren, en onder **Picks → Cartoons and anime** animatiefilms en anime aan- of uitzetten voor de TMDB-tips.

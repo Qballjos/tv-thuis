@@ -16,7 +16,7 @@ import translate  # noqa: E402  (the catalogues and the keys the web app uses)
 GENERIC = {'tmdbKey': '', 'tmdbRegion': '', 'latitude': '', 'longitude': '', 'city': '', 'language': 'auto',
            'currency': '', 'temperature': 'auto', 'theme': 'auto', 'showCrypto': True, 'hideAnimation': False, 'hideApps': [],
            'shelfApps': [], 'drawerFirst': False, 'aioUrl': '', 'aioUser': '', 'aioPassword': '',
-           'jellyfinUrl': '', 'jellyfinKey': '', 'openPicksIn': 'apps'}
+           'jellyfinUrl': '', 'jellyfinKey': '', 'openPicksIn': 'apps', 'clockFormat': 'auto'}
 
 
 def config_from_args(args):
@@ -73,6 +73,8 @@ def read_config(path):
         'jellyfinUrl': values.get('jellyfin_url', '').rstrip('/'),
         'jellyfinKey': values.get('jellyfin_key', ''),
         'openPicksIn': 'nuvio' if values.get('open_picks_in', '').strip().lower() == 'nuvio' else 'apps',
+        # 24 or 12 forces the clock; auto follows the language's catalogue.
+        'clockFormat': values.get('clock_format', '').strip() if values.get('clock_format', '').strip() in ('24', '12') else 'auto',
     }
 
 
@@ -117,6 +119,13 @@ def files(config, made_by):
     for name in ('InterVariable.ttf', 'OFL.txt'):
         with open(os.path.join(ROOT, 'app', 'assets', 'fonts', name), 'rb') as f:
             out['fonts/' + name] = f.read()
+    # Inter in fixed weights for Chromium before 62 (home.css's @font-face); the variable font above stays for WOFF2-less
+    # Tizen 2.4. Same family, same OFL licence.
+    fonts = os.path.join(web, 'fonts')
+    for name in sorted(os.listdir(fonts)):
+        if name.endswith('.woff2'):
+            with open(os.path.join(fonts, name), 'rb') as f:
+                out['fonts/' + name] = f.read()
     return out
 
 
