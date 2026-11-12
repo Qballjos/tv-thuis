@@ -18,6 +18,7 @@ esac
 if [ "$what" = all ] || [ "$what" = android ]; then
   ./build.sh
   bash tools/test-remote.sh
+  bash tools/test-recent.sh
   bash tools/check-profiles.sh
   bash tools/check-watch-next.sh
   bash tools/check-photo-collage.sh

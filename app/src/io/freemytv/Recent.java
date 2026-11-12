@@ -18,7 +18,7 @@ import java.util.concurrent.Executors;
  * first, for the shelf's "Last opened first" order (Prefs.shelfRecent). Noted only while that's on, and deleted when it
  * goes off. Apps opened some other way (the TV's own buttons, another app) aren't seen: that would need an accessibility
  * service, which only some TVs run. No times: a TV whose clock starts wrong after a power cut can't misorder it. A small
- * file (a package a line), replaced whole on each save so a crash never leaves half of it, and read again when another
+ * file per launcher profile (a package a line), replaced whole on each save so a crash never leaves half of it, and read again when another
  * process changed it (on Android 11 to 12L the screensaver runs in the main process).
  */
 final class Recent {
@@ -30,7 +30,19 @@ final class Recent {
     // As last read or written, under the lock; `known` is the same for the UI thread, which never waits on the file.
     private static List<String> keys;
     private static long stamp, size;   // the file's lastModified() and length() then
-    private static volatile List<String> known;
+    private static volatile Snapshot known;
+    private static String loadedFile;
+
+    private static final class Snapshot {
+        final String file;
+        final List<String> keys;
+        Snapshot(String file, List<String> keys) {
+            this.file = file;
+            this.keys = Collections.unmodifiableList(new ArrayList<>(keys));
+        }
+    }
+
+    private static String filename() { return Prefs.profiles().namespace(FILE); }
     /** Goes up whenever the list changes: the home screen orders its shelf again only then. */
     static volatile int version;
 
@@ -38,14 +50,15 @@ final class Recent {
     static void note(Context c, String pkg) {
         if (pkg == null || pkg.isEmpty() || !Prefs.shelfRecent()) return;
         final Context app = c.getApplicationContext();
+        final String file = filename();
         WRITER.execute(() -> {
             synchronized (Recent.class) {
-                fresh(app);
+                fresh(app, file);
                 if (!keys.isEmpty() && keys.get(0).equals(pkg)) return;
                 keys.remove(pkg);
                 keys.add(0, pkg);
                 while (keys.size() > MAX) keys.remove(keys.size() - 1);
-                save(app);
+                save(app, file);
                 changed();
             }
         });
@@ -54,9 +67,11 @@ final class Recent {
     /** "My order" again: nothing is kept. */
     static void clear(Context c) {
         final Context app = c.getApplicationContext();
+        final String file = filename();
         WRITER.execute(() -> {
             synchronized (Recent.class) {
-                File f = new File(app.getFilesDir(), FILE);
+                File f = new File(app.getFilesDir(), file);
+                loadedFile = file;
                 f.delete();
                 keys = new ArrayList<>();
                 stamp = f.lastModified();
@@ -70,16 +85,16 @@ final class Recent {
     static List<HomeApps.Item> order(Context c, List<HomeApps.Item> items) {
         List<String> k;
         synchronized (Recent.class) {
-            fresh(c);
-            k = known;
+            fresh(c, filename());
+            k = known.keys;
         }
         return sorted(k, items);
     }
 
     /** The same on the UI thread, with the list as last read (no file access; as they are until it's been read). */
     static List<HomeApps.Item> orderKnown(List<HomeApps.Item> items) {
-        List<String> k = known;
-        return k == null ? items : sorted(k, items);
+        Snapshot snapshot = known;
+        return snapshot == null || !snapshot.file.equals(filename()) ? items : sorted(snapshot.keys, items);
     }
 
     private static List<HomeApps.Item> sorted(List<String> k, List<HomeApps.Item> items) {
@@ -94,10 +109,11 @@ final class Recent {
     }
 
     /** Lock held. Reads the file if it changed since (a missing or damaged one is an empty list). */
-    private static void fresh(Context c) {
-        File f = new File(c.getFilesDir(), FILE);
+    private static void fresh(Context c, String file) {
+        File f = new File(c.getFilesDir(), file);
         long m = f.lastModified(), n = f.length();
-        if (keys != null && m == stamp && n == size) return;
+        boolean sameFile = file.equals(loadedFile);
+        if (sameFile && keys != null && m == stamp && n == size) return;
         List<String> read = new ArrayList<>();
         if (m != 0) {
             try {
@@ -110,16 +126,17 @@ final class Recent {
         stamp = m;
         size = n;
         boolean first = keys == null;
-        if (!first && read.equals(keys)) return;
+        if (sameFile && !first && read.equals(keys)) return;
+        loadedFile = file;
         keys = read;
-        if (first) known = Collections.unmodifiableList(new ArrayList<>(read)); else changed();
+        if (first) known = new Snapshot(file, read); else changed();
     }
 
     /** Lock held. */
-    private static void save(Context c) {
+    private static void save(Context c, String file) {
         StringBuilder sb = new StringBuilder();
         for (String k : keys) sb.append(k).append('\n');
-        File dir = c.getFilesDir(), f = new File(dir, FILE), tmp = new File(dir, FILE + ".tmp");
+        File dir = c.getFilesDir(), f = new File(dir, file), tmp = new File(dir, file + ".tmp");
         try (FileOutputStream out = new FileOutputStream(tmp)) {
             out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
@@ -133,7 +150,7 @@ final class Recent {
 
     /** Lock held. */
     private static void changed() {
-        known = Collections.unmodifiableList(new ArrayList<>(keys));
+        known = new Snapshot(loadedFile, keys);
         version++;
     }
 }
