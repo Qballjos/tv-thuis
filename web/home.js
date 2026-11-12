@@ -464,7 +464,9 @@
   }
 
   function renderTop() {
-    $('title').textContent = Data.aioTop() ? 'AIO' : tr('For You');
+    setClass(body, 'aio-top', Data.aioTop());
+    $('title').textContent = Data.aioTop() ? '' : tr('For You');
+    renderClock();
     var tabs = $('tabs');
     tabs.innerHTML = '';
     var names = Data.aioTop()
@@ -643,6 +645,9 @@
     var d = new Date(), c = $('clock');
     c.firstChild.textContent = formatDate('format|h:mm', d.getTime());
     c.lastChild.textContent = formatDate('format|EEEE, MMMM d', d.getTime());
+    var header = $('aio-clock');
+    header.firstChild.textContent = I18N.regionalClock(d.getTime());
+    header.lastChild.textContent = I18N.regionalDate(d.getTime());
   }
 
   /** On the minute, so the clock never runs late (the 30-second refresh could, by up to 30 s). */

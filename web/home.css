@@ -112,6 +112,35 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 }
 
 #tabs { position: absolute; left: 54px; top: 158px; height: 68px; white-space: nowrap; }
+/* AIO replaces its heading with the same glass surface as the top controls. */
+#aio-clock {
+  display: none;
+  position: absolute;
+  left: 80px;
+  top: 42px;
+  width: 380px;
+  height: 100px;
+  padding: 10px 24px;
+  box-sizing: border-box;
+  border-radius: 26px;
+  background: -webkit-linear-gradient(top, rgba(255,255,255,0.78), rgba(255,255,255,0.5));
+  background: linear-gradient(rgba(255,255,255,0.78), rgba(255,255,255,0.5));
+  box-shadow: 0 6px 26px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(255,255,255,0.5);
+  color: #1D1D1F;
+  pointer-events: none;
+}
+#aio-clock .time { display: block; font-size: 44px; font-weight: 500; line-height: 48px; font-feature-settings: 'tnum'; -webkit-font-feature-settings: 'tnum'; }
+#aio-clock .date { display: block; font-size: 22px; font-weight: 500; line-height: 32px; color: #515157; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.aio-top #aio-clock { display: block; }
+.aio-top #title { display: none; }
+.night #aio-clock {
+  background: -webkit-linear-gradient(top, rgba(40,40,44,0.8), rgba(17,17,19,0.62));
+  background: linear-gradient(rgba(40,40,44,0.8), rgba(17,17,19,0.62));
+  box-shadow: 0 6px 26px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.08);
+  color: #F5F5F7;
+}
+.night #aio-clock .date { color: #D1D1D6; }
+.aio-top.no-picks #clock { display: none; }
 .tab {
   position: relative;
   display: inline-block;

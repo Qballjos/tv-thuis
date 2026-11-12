@@ -59,6 +59,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -329,12 +330,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private int w, h;
     private float k = 1;
     private String clockText = "", dateText = "", weatherLine = "";
+    private String aioTimeText = "", aioDateText = "";
+    private Paint aioClockPaint;
+    private TextPaint aioDatePaint;
     /** "Off in 42 min" next to the round buttons while the sleep timer runs (Settings > Sleep Timer); "" otherwise. */
     private String sleepText = "";
     private long weatherLineAt = -1;
     private int weatherLinePrefs = -1;
     private String weatherLineLanguage = "";
     private long clockMinute = -1;
+    private Locale clockRegion;
+    private int clockGeneration = -1;
     private boolean okDown, backDown;
     private float touchX, touchY;
     private final RectF hitBox = new RectF();   // the mouse's hit tests (menu rows, Continue Watching cards)
@@ -968,6 +974,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         lDate = Ui.text(Ui.semibold, 34 * k, L_DIM);
         lClock = Ui.numbers(Ui.light, 200 * k, L_INK);
         lClock.setLetterSpacing(-0.01f);
+        aioClockPaint = Ui.numbers(Ui.medium, 44 * k, L_INK);
+        aioDatePaint = new TextPaint(Ui.text(Ui.medium, 22 * k, L_DIM));
         lWeather = Ui.text(Ui.medium, 34 * k, L_DIM);
         lClockQuote = Ui.numbers(Ui.medium, 28 * k, L_DIM);
         lightGradient = tintShade = null;
@@ -1088,7 +1096,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 refreshHero(false);
                 heroLayer.invalidate();
             }
-            if (clockMode()) heroLayer.invalidate();
+            if (clockMode() || aioTabs()) heroLayer.invalidate();
         }
 
         // Busy: something is moving, or the sheet or the drawer is open.
@@ -1197,10 +1205,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private boolean updateClock() {
         long now = System.currentTimeMillis();
         long minute = now / 60_000;
-        if (minute == clockMinute || clockPaint == null) return false;
+        Locale region = Locale.getDefault();
+        if (clockPaint == null || minute == clockMinute && region.equals(clockRegion) && clockGeneration == Ui.generation) return false;
         clockMinute = minute;
+        clockRegion = region;
+        clockGeneration = Ui.generation;
         clockText = Ui.clock(now);
         dateText = Ui.date(now);
+        aioTimeText = Ui.regionalClock(now);
+        aioDateText = TextUtils.ellipsize(Ui.regionalDate(now), aioDatePaint, 332 * k, TextUtils.TruncateAt.END).toString();
         return true;
     }
 
@@ -4741,9 +4754,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
             return;
         }
-        String hello = aioTabs() ? "AIO" : picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching");
-        c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
-        titleRight = MARGIN * k + lTitle.measureText(hello);
+        if (aioTabs()) {
+            drawAioClock(c);
+            titleRight = (MARGIN + 380) * k;
+        } else {
+            String hello = picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching");
+            c.drawText(hello, MARGIN * k - Ui.leftBearing(lTitle, hello), L_TITLE_BASE * k, lTitle);
+            titleRight = MARGIN * k + lTitle.measureText(hello);
+        }
         if (!picksMode()) {
             if (continueMode()) drawWatchRow(c);
             if (HomeData.coinCount() > 0 || playingTab != null) drawQuotes(c);
@@ -4784,6 +4802,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     private boolean picksOn() {
         return Recs.hasKey(getContext());
+    }
+
+    /** The AIO heading's quiet, noninteractive clock, using the same glass as the round controls. */
+    private void drawAioClock(Canvas c) {
+        cell.set(MARGIN * k, 42 * k, (MARGIN + 380) * k, 142 * k);
+        float radius = 26 * k;
+        tmp.set(cell);
+        tmp.offset(0, 6 * k);
+        shadow.setColor(Ui.alpha(0xFF000000, tone(0.1f, 0.3f)));
+        shadows.draw(c, tmp, radius, SHADOW_BLUR * k, shadow);
+        scene.liquid(c, cell, radius, tone(glassLight(), SMOKE), tone(0.55f, 0.5f),
+                tone(0.02f, 0.01f), 12 * k, 8 * k, tone(0.6f, 0.45f), 1);
+        aioClockPaint.setColor(tone(L_INK, WHITE));
+        aioDatePaint.setColor(tone(0xFF515157, 0xFFD1D1D6));
+        c.drawText(aioTimeText, (MARGIN + 24) * k, 91 * k, aioClockPaint);
+        c.drawText(aioDateText, (MARGIN + 24) * k, 124 * k, aioDatePaint);
     }
 
     private void drawClock(Canvas c) {
@@ -4960,7 +4994,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int color = Ui.alpha(tone(L_INK, 0xEBFFFFFF), 0.85f);
         float x = MARGIN * k;
         // The top title ("For You", or "Continue Watching") is on this line too: the icons start after it, not on it.
-        if (!clockMode()) x += lTitle.measureText(aioTabs() ? "AIO" : picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
+        if (aioTabs()) x += 380 * k + gap;
+        else if (!clockMode()) x += lTitle.measureText(picksMode() ? Ui.tr("For You") : Ui.tr("Continue Watching")) + gap;
         if (network != 0) x = drawStatusIcon(c, network == 2 ? "ethernet" : "wifi", x, height, gap, color);
         if (bluetoothConnected) x = drawStatusIcon(c, "bluetooth", x, height, gap, color);
         if (usbConnected) drawStatusIcon(c, "usb", x, height, gap, color);

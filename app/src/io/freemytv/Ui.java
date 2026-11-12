@@ -514,6 +514,24 @@ final class Ui {
         return clockPattern("format|h:mm", "Hm", "hmma").format(now);
     }
 
+    /** Header formatting uses the UI language but retains the TV's regional conventions. */
+    private static Locale clockLocale() {
+        String region = Locale.getDefault().getCountry();
+        return region.isEmpty() ? locale : new Locale.Builder().setLocale(locale).setRegion(region).build();
+    }
+
+    static String regionalClock(long now) {
+        Locale loc = clockLocale();
+        String pattern = android.text.format.DateFormat.getBestDateTimePattern(loc, h24() ? "Hm" : "hm");
+        return new SimpleDateFormat(pattern, loc).format(new Date(now));
+    }
+
+    static String regionalDate(long now) {
+        Locale loc = clockLocale();
+        String pattern = android.text.format.DateFormat.getBestDateTimePattern(loc, "EEEEMMMMd");
+        return new SimpleDateFormat(pattern, loc).format(new Date(now));
+    }
+
     /** "5:21 PM" (sunrise and sunset), following the clock's 12/24-hour choice. */
     static String time(long at) {
         return once(h24() ? "time24" : "time", at, () -> clockPattern("format|h:mm a", "Hm", "hmma").format(at));

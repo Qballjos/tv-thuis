@@ -259,6 +259,39 @@ var I18N = (function () {
     return REGIONS[code] ? code + '-' + REGIONS[code] : code;
   }
 
+  /** UI language with the TV's region: English text must not force US date/time conventions. */
+  function clockLocale() {
+    var tv = (navigator.language || '').replace(/_/g, '-').split('-u-')[0];
+    var region = /-([a-z]{2}|[0-9]{3})(?:-|$)/i.exec(tv);
+    if (!region) return locale;
+    var language = lang === 'zh-TW' ? 'zh-Hant' : lang === 'zh-CN' ? 'zh-Hans' : base(lang);
+    return language + '-' + region[1].toUpperCase();
+  }
+
+  function regional(at, date) {
+    var loc = clockLocale(), key = 'regional|' + date + '|' + loc + '|' + clock;
+    var minute = Math.floor(at / 60000), last = formatted[key];
+    if (last && last.minute === minute) return last.text;
+    var options = date ? {weekday: 'long', month: 'long', day: 'numeric'} : {hour: 'numeric', minute: '2-digit'};
+    var value;
+    try {
+      if (!date) options.hour12 = clock === 'auto'
+        ? new Intl.DateTimeFormat(navigator.language || undefined, {hour: 'numeric'}).resolvedOptions().hour12
+        : clock === '12';
+      value = new Intl.DateTimeFormat(loc, options).format(new Date(at));
+    } catch (e) {
+      // Old Tizen has no Intl. Keep catalogue names; English's regional order and clock still differ.
+      var english = base(lang) === 'en';
+      var monthFirst = /-(US|CA|PH)\b/i.test(loc);
+      var twelve = /-(US|CA|AU|NZ|PH|IN|SG|HK)\b/i.test(loc);
+      var pattern = date ? (english && !monthFirst ? 'EEEE, d MMMM' : tr('format|EEEE, MMMM d'))
+        : clock === '24' || clock === 'auto' && !twelve ? 'HH:mm' : 'h:mm a';
+      value = format(pattern, new Date(at), loc);
+    }
+    formatted[key] = {minute: minute, text: value};
+    return value;
+  }
+
   return {
     /** After the language changes in Home Settings (and once at startup). */
     set: function (setting) {
@@ -280,6 +313,8 @@ var I18N = (function () {
     trf: trf,
     plural: plural,
     formatDate: formatDate,
+    regionalClock: function (at) { return regional(at, false); },
+    regionalDate: function (at) { return regional(at, true); },
     /** Home Settings > Clock: '24', '12' or 'auto' (the language's own). */
     setClock: function (choice) { clock = choice; formatted = {}; }
   };
