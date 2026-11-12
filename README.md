@@ -66,6 +66,9 @@ De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime
 
 Op Android en Google TV kun je **OK ingedrukt houden op een bovenste knop** om die met links/rechts te
 verplaatsen. OK bewaart de volgorde; Terug annuleert. De profielknop blijft rechts staan.
+Via **Shelf → Shelf order** kies je je eigen volgorde of **Last opened first**. Bij die laatste keuze komt
+de laatst vanuit TV Thuis geopende app vooraan en is handmatig verplaatsen van de app-plank uitgeschakeld;
+de bovenste knoppen blijven verplaatsbaar. Terugschakelen naar **My order** wist de lijst van geopende apps.
 Via **Top Buttons → App Store** kun je Google Play of de Amazon Appstore toevoegen, als die beschikbaar is.
 Op LG- en Samsung-tv's zonder antenne kun je **Startscherm → Live TV** uit de ingangenlijst halen.
 
@@ -76,6 +79,11 @@ ontwaken uit standby blijft zoals het was.
 
 Op LG kunnen TMDB-tips via **Open picks in → Nuvio** direct op hun titelpagina openen. AIO-titels blijven
 Wholphin gebruiken. De LG-installatie past de schermresolutie automatisch aan voor HD- en Full HD-tv's.
+
+Nieuwere upstream-aanpassingen ondersteunen de YouTube-knop van Chromecast met Google TV, app-knoppen op
+ondersteunde onn-afstandsbedieningen en de Input-knop op Hisense. Tv's met weinig geheugen gebruiken ook
+vanaf Android 13 de lichtere tekenpaden. Bij Samsung betekent `download failed[116]` meestal dat er te weinig
+vrije opslag voor apps is; de Python-installatietool toont de foutmelding van de tv zelf.
 
 ## Profielen (Android en Google TV)
 
