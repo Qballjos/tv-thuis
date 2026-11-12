@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 concurrency:
   group: upstream
@@ -23,6 +24,8 @@ jobs:
         with:
           fetch-depth: 0
       - name: Merge upstream main
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -34,3 +37,5 @@ jobs:
           fi
           git merge upstream/main -m "Merge upstream Free My TV."
           git push origin HEAD
+          # GITHUB_TOKEN pushes do not trigger push workflows; explicitly check the new main for its release.
+          gh workflow run check.yml --ref main --repo "$GITHUB_REPOSITORY"

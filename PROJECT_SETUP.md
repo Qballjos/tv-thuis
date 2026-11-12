@@ -75,3 +75,17 @@ Delegate to subagents only when the user requests it or an applicable skill expl
 Pushing to main can publish the website and, after successful checks, create a release. Treat publishing,
 merging, and release operations according to the user's requested scope; do not assume that permission to
 prepare a fix also requests a release.
+
+## Versioned updates
+
+Every change published to main must receive a new release version after its checks pass. The Release
+workflow runs tools/release-version.py against the latest published tag to increase versionName and
+versionCode in the build; it never commits those generated values back, avoiding release loops. Re-running
+checks for the currently released commit does not create a second release. Development commits can be
+grouped into one tested main update; do not rewrite history to retrofit versions onto existing commits.
+
+When explicitly setting a source version for an update, keep app/AndroidManifest.xml, webos/appinfo.json
+and tizen/config.xml in step. Never publish an APK signed with a temporary development key: the release
+workflow uses and verifies the existing TV update certificate. Upstream bot pushes must explicitly dispatch
+Check, since pushes made with GITHUB_TOKEN do not trigger push workflows. Successful main dispatch checks
+are eligible for Release just like successful main push checks.

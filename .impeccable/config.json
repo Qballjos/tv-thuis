@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "files": [
+          "web/home.css"
+        ],
+        "createdAt": "2026-11-12T18:15:25.046Z",
+        "reason": "Project design: CLAUDE.md requires bundled fixed Inter weights for old TV compatibility; retained from baseline 4291456."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.2, 0.9, 0.3, 1.2)",
+        "files": [
+          "web/home.css"
+        ],
+        "createdAt": "2026-11-12T18:15:25.155Z",
+        "reason": "Project design: existing remote-focus spring motion matches Android HomeView; unchanged from baseline 4291456."
+      },
+      {
+        "rule": "bounce-easing",
+        "value": "cubic-bezier(0.2, 0.9, 0.3, 1.15)",
+        "files": [
+          "web/home.css"
+        ],
+        "createdAt": "2026-11-12T18:15:25.251Z",
+        "reason": "Project design: existing TV card focus and legacy layered motion; unchanged from baseline 4291456."
+      }
+    ]
+  }
+}

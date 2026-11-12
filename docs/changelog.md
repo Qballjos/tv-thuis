@@ -4,6 +4,15 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+## 1.3.10
+
+- De AIO-kop is vervangen door een glazen klok met datum. De klok volgt de regio en klokinstelling van de tv;
+  een expliciete keuze voor 12 of 24 uur heeft voorrang.
+- Upstream-conflicten opgelost met behoud van AIO, profielen en screensavers. De nieuwe volgorde op laatst
+  geopende app bewaart de geschiedenis per profiel.
+- Elke geslaagde update op main krijgt automatisch een hogere releaseversie en Android-versiecode.
+  Upstream-updates starten de controles nu ook expliciet, zodat de automatische update niet wordt overgeslagen.
+
 - Upstream opnieuw samengevoegd na conflicten in vertalingen en fotocode. De AIO-integratie, profielen,
   Immich-albumfiltering, collage en instelbare screensaverbediening blijven behouden.
 - Eigen portretten, vierkante foto's en panorama's blijven in de schermvullende screensaver helemaal zichtbaar;

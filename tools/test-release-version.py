@@ -1,4 +1,5 @@
 import pathlib
+import re
 import subprocess
 import tempfile
 import unittest
@@ -6,6 +7,19 @@ import unittest
 SCRIPT = pathlib.Path(__file__).with_name('release-version.py')
 
 class ReleaseVersionTest(unittest.TestCase):
+    def test_successive_releases_after_source_version_bump_increase_code(self):
+        source = '<manifest android:versionCode="1030010" android:versionName="1.3.10">'
+        numbers = []
+        with tempfile.TemporaryDirectory() as folder:
+            manifest = pathlib.Path(folder) / 'AndroidManifest.xml'
+            for latest in ['v1.3.9', 'v1.3.10', 'v1.3.11']:
+                manifest.write_text(source)
+                result = subprocess.run(['python3', str(SCRIPT), str(manifest), latest], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                numbers.append(int(re.search(r'versionCode="(\d+)"', manifest.read_text())[1]))
+        self.assertLess(numbers[0], numbers[1])
+        self.assertLess(numbers[1], numbers[2])
+
     def test_increments_published_version_and_code(self):
         with tempfile.TemporaryDirectory() as folder:
             manifest = pathlib.Path(folder) / 'AndroidManifest.xml'

@@ -17,7 +17,10 @@ version = max(source, (published[0], published[1], published[2] + 1))
 major, minor, patch = version
 if minor >= 100 or patch >= 10000:
     sys.exit('Version exceeds the Android version code allocation.')
-number = max(int(code[1]) + 1, major * 1000000 + minor * 10000 + patch)
+# Do not add one to an already bumped source code: that would consume the next patch's code too.
+number = major * 1000000 + minor * 10000 + patch
+if number < int(code[1]):
+    sys.exit('Source version code exceeds its release version: raise versionName before publishing.')
 if number > 2100000000:
     sys.exit('Android version code limit exceeded.')
 name = '.'.join(map(str, version))
