@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,17 +52,17 @@ final class ImmichPhotos {
     private static volatile ImmichSource selected;
 
     static ImmichSource source() {
-        String mode = Prefs.photoSource(), album = Prefs.photoAlbum();
+        String mode = Prefs.photoSource(), album = Prefs.photoAlbum(), server = Prefs.immichServer();
         ImmichSource value = selected;
-        if (value == null || !value.matches(mode, album)) {
-            selected = value = new ImmichSource(Config.IMMICH_SERVER, mode, album);
+        if (value == null || !value.server.equals(server) || !value.matches(mode, album)) {
+            selected = value = new ImmichSource(server, mode, album);
         }
         return value;
     }
 
     /** A server in config.properties and its key sent to this TV, read again every 30 s at most (Settings asks every frame). */
     static boolean configured(Context c) {
-        if (Config.IMMICH_SERVER.trim().isEmpty()) return false;
+        if (Prefs.immichServer().isEmpty()) return false;
         long now = SystemClock.uptimeMillis();
         if (checkedAt < 0 || now - checkedAt > 30_000) {
             key = Secrets.get(c, Secrets.IMMICH_KEY);
@@ -228,9 +227,9 @@ final class ImmichPhotos {
     }
 
     private static HttpURLConnection open(String path) throws IOException {
-        String server = Config.IMMICH_SERVER.trim();
+        String server = Prefs.immichServer();
         if (server.endsWith("/")) server = server.substring(0, server.length() - 1);
-        HttpURLConnection http = (HttpURLConnection) new URL(server + path).openConnection();
+        HttpURLConnection http = AioHttp.open(server + path, (int) MAX_ORIGINAL);
         // Never followed: on a redirect to another host only Authorization is dropped, and x-api-key would go along
         http.setInstanceFollowRedirects(false);
         http.setConnectTimeout(10_000);

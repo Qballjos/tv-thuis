@@ -137,6 +137,7 @@ de bestaande schermbeveiliging werken. De indeling wordt per profiel bewaard; de
 De bestaande Immich-koppeling kan alle foto's of één album gebruiken:
 
 1. Zet `immich_server=https://photos.example.com` in je lokale, genegeerde `config.properties` en bouw de APK.
+   De app bewaart dit adres daarna op de tv; ook een latere standaard release blijft die server gebruiken.
    Gebruik het basisadres van de server, zonder `/photos` of `/api`. HTTP kan alleen op het eigen netwerk.
 2. Maak in Immich onder **Account Settings → API Keys** een sleutel met `asset.read`, `asset.view`,
    `asset.download` en `album.read`. Houd die privé; hij komt nooit in de APK of repository.

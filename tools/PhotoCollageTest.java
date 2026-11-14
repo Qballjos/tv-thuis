@@ -126,6 +126,8 @@ public final class PhotoCollageTest {
         field = Prefs.class.getDeclaredField("app");
         field.setAccessible(true);
         field.set(null, context);
+        context.getSharedPreferences("settings", 0).edit().putString("immichServer", "https://photos.example.invalid/").commit();
+        check(Prefs.immichServer().equals("https://photos.example.invalid"), "saved photo server survives a generic APK without build configuration");
         File photos = new File(root, "photos");
         photos.mkdirs();
         File[] old = photos.listFiles();
@@ -167,6 +169,9 @@ public final class PhotoCollageTest {
         check(picks.size() == 1 && chosen.equals(((Recs.Pick) picks.get(0)).photo), "fullscreen album wins over configured AIO art");
         Prefs.setPhotoSource("album", "12345678-9abc-4def-8abc-123456789abc", "Empty album");
         check(((List<?>) source.invoke(view)).isEmpty(), "empty fullscreen album uses clock fallback, never movie art");
+        String previousSource = ImmichPhotos.source().key;
+        context.getSharedPreferences("settings", 0).edit().putString("immichServer", "https://other-photos.example.invalid").commit();
+        check(!ImmichPhotos.source().key.equals(previousSource) && Photos.files(context).isEmpty(), "a restored server address also owns its cache identity");
         System.out.println("Immich cache: real directory filtering, pending/empty albums and repeated switches passed.");
     }
 
