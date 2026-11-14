@@ -4,6 +4,9 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+- Het Immich-serveradres uit een privébuild blijft bewaard bij een overstap naar de standaard release. Foto's
+  via een lokaal HTTP-adres blijven werken zonder het thuisadres in een publieke APK op te nemen.
+
 ## 1.3.10
 
 - De AIO-kop is vervangen door een glazen klok met datum. De klok volgt de regio en klokinstelling van de tv;

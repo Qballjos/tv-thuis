@@ -614,6 +614,13 @@ final class Prefs {
         version++;
     }
 
+    /** Keep the household's photo server when a personal build is replaced by a generic release. */
+    static String immichServer() {
+        String server = (app == null ? Config.IMMICH_SERVER : device().getString("immichServer", Config.IMMICH_SERVER)).trim();
+        while (server.endsWith("/")) server = server.substring(0, server.length() - 1);
+        return server;
+    }
+
     /**
      * Writes the build's household settings once, into the TV's private storage. A later update from GitHub is built
      * without config.properties, and these values would otherwise go with it.
@@ -622,6 +629,10 @@ final class Prefs {
         SharedPreferences s = device();
         SharedPreferences.Editor e = s.edit();
         boolean changed = false;
+        if (!s.contains("immichServer") && !Config.IMMICH_SERVER.trim().isEmpty()) {
+            e.putString("immichServer", Config.IMMICH_SERVER.trim());
+            changed = true;
+        }
         if (!s.contains("tmdbKey") && !Config.TMDB_KEY.trim().isEmpty()) {
             e.putString("tmdbKey", Config.TMDB_KEY.trim());
             changed = true;

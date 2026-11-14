@@ -6,16 +6,20 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
-/** Runtime AIO addresses: HTTPS normally, plain HTTP only to a pinned private IPv4 address. */
+/** Runtime server addresses: HTTPS normally, plain HTTP only to a pinned private IPv4 address. */
 final class AioHttp {
     private AioHttp() {}
 
     static HttpURLConnection open(String address) throws IOException {
+        return open(address, 12 * 1024 * 1024);
+    }
+
+    static HttpURLConnection open(String address, int responseLimit) throws IOException {
         URL url = new URL(address);
         if (url.getUserInfo() != null || url.getRef() != null) throw new IOException("Invalid AIO address");
         HttpURLConnection c;
         if ("https".equals(url.getProtocol())) c = (HttpURLConnection) url.openConnection();
-        else if ("http".equals(url.getProtocol())) c = new LanConnection(url);
+        else if ("http".equals(url.getProtocol())) c = new LanConnection(url, responseLimit);
         else throw new IOException("AIO requires HTTPS, or HTTP on your own network");
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
@@ -37,8 +41,9 @@ final class AioHttp {
         private final ByteArrayOutputStream request = new ByteArrayOutputStream();
         private byte[] response;
         private Socket socket;
+        private final int responseLimit;
 
-        LanConnection(URL url) { super(url); }
+        LanConnection(URL url, int responseLimit) { super(url); this.responseLimit = responseLimit; }
         @Override public OutputStream getOutputStream() { return request; }
         @Override public void connect() throws IOException {
             if (response != null) return;
@@ -123,13 +128,13 @@ final class AioHttp {
             }
             throw new EOFException("Incomplete AIO response");
         }
-        private static void copy(InputStream in, ByteArrayOutputStream out, long left) throws IOException {
+        private void copy(InputStream in, ByteArrayOutputStream out, long left) throws IOException {
             if (left < -1) throw new IOException("Invalid response length");
             byte[] buffer = new byte[8192];
             while (left != 0) {
                 int n = in.read(buffer, 0, left < 0 ? buffer.length : (int) Math.min(left, buffer.length));
                 if (n < 0) { if (left > 0) throw new EOFException("Incomplete AIO response"); else break; }
-                if (out.size() + n > 12 * 1024 * 1024) throw new IOException("AIO response too large");
+                if (out.size() + n > responseLimit) throw new IOException("Server response too large");
                 out.write(buffer, 0, n);
                 if (left > 0) left -= n;
             }

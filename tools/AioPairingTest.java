@@ -51,6 +51,17 @@ public final class AioPairingTest {
                 c.getOutputStream().write("a scoped request".getBytes(StandardCharsets.UTF_8));
                 check(c.getResponseCode() == 200 && new String(c.getInputStream().readAllBytes(), StandardCharsets.UTF_8).equals("a scoped request"), "bounded LAN request/response");
                 check(AioHttp.open(base + "/redirect").getResponseCode() == 302, "redirects are never followed");
+                HttpURLConnection image = AioHttp.open(base + "/echo", 64);
+                image.setRequestMethod("POST");
+                image.setDoOutput(true);
+                byte[] pixels = new byte[] {0, 1, 2, -1, 0, -128};
+                image.getOutputStream().write(pixels);
+                check(java.util.Arrays.equals(image.getInputStream().readAllBytes(), pixels), "runtime image downloads keep binary bytes");
+                HttpURLConnection large = AioHttp.open(base + "/echo", 4);
+                large.setRequestMethod("POST");
+                large.setDoOutput(true);
+                large.getOutputStream().write(pixels);
+                try { large.getInputStream(); throw new AssertionError("response bound ignored"); } catch (IOException expected) {}
             } finally { server.stop(0); }
         }
         System.out.println("AIO pairing: link validation, token origin, HTTPS downgrade, private HTTP, chunked responses and redirects passed.");
