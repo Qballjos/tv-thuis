@@ -65,6 +65,7 @@ public final class ProfilesTest {
         credentials.put("aioDeviceId", "test-device-id");
         credentials.put("jellyfinUrl", "https://jellyfin.example.invalid");
         credentials.put("jellyfinKey", "test-jellyfin-key");
+        credentials.put("immichServer", "https://photos.example.invalid");
         original.data.putAll(credentials);
         java.util.function.Function<String, SharedPreferences> factory = n -> files.computeIfAbsent(n, k -> new Memory()).prefs();
         Profiles profiles = new Profiles(registry.prefs(), factory, "Personal");

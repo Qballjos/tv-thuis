@@ -130,7 +130,7 @@ final class Profiles {
     static boolean shared(String key) {
         return key.equals("tmdbKey") || key.equals("nowPlaying") || key.startsWith("sleep") || key.startsWith("key")
                 || key.equals("aioUrl") || key.equals("aioUser") || key.equals("aioPassword") || key.equals("aioToken") || key.equals("aioDeviceId")
-                || key.equals("jellyfinUrl") || key.equals("jellyfinKey");
+                || key.equals("jellyfinUrl") || key.equals("jellyfinKey") || key.equals("immichServer");
     }
 
     synchronized boolean remove(String id) {
