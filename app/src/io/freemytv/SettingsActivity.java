@@ -152,9 +152,9 @@ public class SettingsActivity extends Activity {
         private static final float LIST_ROW_H = 68, LIST_ROW_GAP = 6;
         private static final int PICK_VISIBLE = 9;
         private static final float LIST_X = 1000, LIST_R = 1824, LIST_TOP = 186, ROW_GAP = 8, CHOICE_H = 104;
-        // The main menu: eight rows, then the comparison, the picks (with the Watchmode credit) and two notices, all on
+        // The main menu: nine rows, then the comparison, the picks (with the Watchmode credit) and two notices, all on
         // one 1080 px screen: the rows share the 462 px that seven took.
-        private static final float MAIN_TOP = 140, ROW_H = 53.75f, MAIN_GAP = 4;
+        private static final float MAIN_TOP = 140, ROW_H = 47.33f, MAIN_GAP = 4;
         private static final int AMBER = 0xFFFFC266, INK = 0xFF1C1C1E;
 
         private final SettingsActivity activity;
@@ -171,6 +171,7 @@ public class SettingsActivity extends Activity {
         private final List<String[]> services = new ArrayList<>();   // {key, name} of the streaming services on the TV (Picks from)
         private final List<String> shelfOrder = new ArrayList<>();
         private boolean editingTop;
+        private boolean editingInputs;   // the editor edits the drawer's inputs instead of the shelf or top buttons
         /** The shelf editor's first row: the order set here or the last one opened first (Prefs.shelfRecent). */
         private static final String ORDER_ROW = "#order";
         private int pickFor, pickCurrent, pickScroll;   // pickFor: the remote button (index + 1)
@@ -214,6 +215,8 @@ public class SettingsActivity extends Activity {
         private Toast whyToast;   // why the focused option is unavailable
         private String[] whyRows;  // each row's reason, worked out once per screen (null: again on the next frame)
         private int whyScreen = -1, whyScroll = -1;
+        private String liveButtonText;   // Home Settings > Live TV button's value (liveButtonValue)
+        private int liveButtonAt;
         private int sleepLeft;     // the sleep timer's minutes left, read with the state, not on every frame
         /** How long the TV waits before the screensaver: the same steps Google TV offered. */
         private static final int[] SAVER_AFTER = {300_000, 600_000, 900_000, 1_800_000, 3_600_000, 7_200_000};
@@ -222,8 +225,7 @@ public class SettingsActivity extends Activity {
         private boolean pickSaverKey;   // Screensaver settings is waiting for the request button
         private int whyState = -1;
         private String errorShown;
-        private String aioStatus = "";
-        private boolean aioBusy;
+        private final AioSettings aioSettings;
         private final Spoken spoken;
         private long startedAt, lastNanos, pendingAt, lastSky;
         // The aurora's own clock, which runs only in the frames drawn: it rests with the screen, and the next key or the
@@ -290,6 +292,11 @@ public class SettingsActivity extends Activity {
         SettingsView(SettingsActivity a) {
             super(a);
             activity = a;
+            aioSettings = new AioSettings(activity, handler, new AioSettings.Host() {
+                public void pair() { openKeyScreen(true); }
+                public void firstRow() { focus = 0; }
+                public void invalidate() { SettingsView.this.invalidate(); }
+            });
             for (int i = 0; i < pop.length; i++) pop[i] = new Spring(0.28f, 0.85f, 0);
             Shaders.settings(scene.palette);
             scene.setMotion(0.5f, 0.2f);
@@ -337,7 +344,7 @@ public class SettingsActivity extends Activity {
                         return Ui.trf("Home Screen, {mode}", "mode", value);
                     }
                     String[] names = {Ui.tr("Home Settings"),
-                            Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
+                            Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Inputs"), Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"),
                             Ui.tr("TV Settings")};
                     if (row == 1) return Ui.trf("Screensaver, {value}", "value", saverSummary());
                     return row - 2 < names.length ? names[row - 2] : "";
@@ -390,6 +397,10 @@ public class SettingsActivity extends Activity {
                         return app[1] + ", " + (place >= 0 ? Ui.trf("in the top buttons, place {n}", "n", place + 1)
                                 : Ui.tr("not in the top buttons"));
                     }
+                    if (editingInputs) {
+                        return app[1] + ", " + (place >= 0 ? Ui.trf("in the inputs, place {n}", "n", place + 1)
+                                : Ui.tr("not in the inputs"));
+                    }
                     return app[1] + ", " + (place >= 0 ? Ui.trf("on the shelf, place {n}", "n", place + 1)
                             : Ui.tr("not on the shelf"));
                 }
@@ -423,6 +434,7 @@ public class SettingsActivity extends Activity {
             running = true;
             whyRows = null;
             readSaver();
+            liveButtonText = null;   // the device on the port may have another name by now
             startedAt = SystemClock.uptimeMillis();
             lastNanos = 0;
             handler.post(poll);
@@ -545,7 +557,7 @@ public class SettingsActivity extends Activity {
 
         private int rowCount() {
             switch (screen) {
-                case MAIN: return 8;
+                case MAIN: return 9;
                 case HOME_CHOICE: return 2;
                 case HOME_SETTINGS: return Math.min(SETTINGS_VISIBLE, settingLabels().length);
                 case PICKER: return Math.min(PICK_VISIBLE, pickLabels.size());
@@ -555,7 +567,7 @@ public class SettingsActivity extends Activity {
                 case TMDB_KEY: return keyRowIds.length;
                 case PICKS: return picksLabels().length;
                 case PICK_FROM: return Math.min(PICK_VISIBLE, services.size());
-                case AIO: return aioLabels().length;
+                case AIO: return aioSettings.labels().length;
                 case WATCH_APPS: return Math.min(PICK_VISIBLE, listSize());
                 default: return Prefs.KEYS.length;
             }
@@ -604,9 +616,9 @@ public class SettingsActivity extends Activity {
             String busyText = busyText();
             String mode = freeActive() ? Ui.tr("TV Thuis") : Ui.tr("Original");
             String[] labels = {Ui.tr("Home Screen"), Ui.tr("Screensaver"),
-                    Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"),
+                    Ui.tr("Home Settings"), Ui.tr("Shelf"), Ui.tr("Top Buttons"), Ui.tr("Inputs"),
                     Ui.tr("Remote Buttons"), Ui.tr("Sleep Timer"), Ui.tr("TV Settings")};
-            String[] values = {working ? "" : mode, saverSummary(), "", "", "", "", "", ""};
+            String[] values = {working ? "" : mode, saverSummary(), "", "", "", "", "", "", ""};
             for (int i = 0; i < labels.length; i++) {
                 float y = (MAIN_TOP + i * (ROW_H + MAIN_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + ROW_H * k);
@@ -993,8 +1005,9 @@ public class SettingsActivity extends Activity {
                                 pickScroll = 0;
                                 screen = HOME_SETTINGS;
                             } else {
-                                focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
-                                        : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : screen == SAVER ? 1 : 0;
+                                focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT
+                                        ? (editingTop ? 4 : editingInputs ? 5 : 3)
+                                        : screen == REMOTE_KEYS ? 6 : screen == POWER ? 7 : screen == SAVER ? 1 : 0;
                                 if (screen == SAVER) pickSaverKey = false;
                                 screen = MAIN;
                             }
@@ -1014,13 +1027,13 @@ public class SettingsActivity extends Activity {
         private static final String[] UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark"},
                 CLOCKS = {"auto", "24", "12"};
         /** Home Settings: language, temperature, theme, clock, my photos, sounds, top of the screen, picks, Continue
-         *  Watching's apps, watch from the screensaver, Android apps, status icons, Recent Apps, weather, city, forecast,
+         *  Watching's apps, watch from the screensaver, Android apps, status icons, Recent Apps, at power-on, Live TV button, weather, city, forecast,
          *  now playing, Home Assistant (only on builds with its address), quotes, one row per coin, then the TMDB and Watchmode keys and
          *  updates (the last row). */
         private static final int CLOCK_ROW = 3, PHOTOS_ROW = 4, TOP_ROW = 6, PICKS_ROW = 7, WATCH_ROW = 8,
                 SAVER_ROW = 9, ANDROID_APPS_ROW = 10, STATUS_ICONS_ROW = 11, RECENTS_ROW = 12, POWER_ON_ROW = 13,
-                WEATHER_ROW = 14, CITY_ROW = 15, FORECAST_ROW = 16, PLAYING_ROW = 17, HOME_ROW = Config.HOME_ASSISTANT ? 18 : -1,
-                QUOTES_ROW = Config.HOME_ASSISTANT ? 19 : 18, COIN_ROWS = QUOTES_ROW + 1;
+                LIVE_BUTTON_ROW = 14, WEATHER_ROW = 15, CITY_ROW = 16, FORECAST_ROW = 17, PLAYING_ROW = 18,
+                HOME_ROW = Config.HOME_ASSISTANT ? 19 : -1, QUOTES_ROW = Config.HOME_ASSISTANT ? 20 : 19, COIN_ROWS = QUOTES_ROW + 1;
         /** No "home" on Xiaomi TVs: their remote sends one Home press as a burst of presses (HomeView.BURST_MS). */
         private static final String[] RECENTS = RemoteKeys.XIAOMI ? new String[] {"off", "drawer"}
                 : new String[] {"off", "drawer", "home"};
@@ -1047,6 +1060,7 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("Status icons"));   // before the weather widget: City and Forecast are the widget's
             l.add(Ui.tr("Recent Apps"));
             l.add(Ui.tr("At power-on"));
+            l.add(Ui.tr("Live TV button"));
             l.add(Ui.tr("Weather widget"));
             l.add(Ui.tr("City"));
             l.add(Ui.tr("Forecast"));
@@ -1162,6 +1176,7 @@ public class SettingsActivity extends Activity {
             v[RECENTS_ROW] = rec.equals("home") ? Ui.tr("recents|Drawer and Home twice") : rec.equals("drawer") ? Ui.tr("recents|In the drawer") : Ui.tr("Off");
             String power = Prefs.powerOn();
             v[POWER_ON_ROW] = power.equals("home") ? Ui.tr("power|Home screen") : power.equals("live") ? Ui.tr("Live TV") : Ui.tr("TV's choice");
+            v[LIVE_BUTTON_ROW] = liveButtonValue();
             v[ANDROID_APPS_ROW] = onOff(Prefs.androidApps());
             v[STATUS_ICONS_ROW] = onOff(Prefs.statusIcons());
             v[WEATHER_ROW] = onOff(Prefs.weather());
@@ -1181,6 +1196,20 @@ public class SettingsActivity extends Activity {
             return v;
         }
 
+        /**
+         * The Live TV button's row: Live TV, or the input it opens under its name. Naming it asks the TV for its inputs,
+         * and the list is drawn at every frame while the focus moves: read again only when a setting changed or the
+         * screen came back.
+         */
+        private String liveButtonValue() {
+            if (liveButtonText == null || liveButtonAt != Prefs.version) {
+                HomeApps.Item box = HomeApps.liveButtonInput(getContext());
+                liveButtonText = box != null ? box.label : Ui.tr("Live TV");
+                liveButtonAt = Prefs.version;
+            }
+            return liveButtonText;
+        }
+
         /** "auto", then English and every language with a catalogue. */
         private static String[] languageChoices() {
             String[] all = Ui.languages();
@@ -1198,12 +1227,14 @@ public class SettingsActivity extends Activity {
             switch (screen) {
                 case MAIN:
                     return i == 0 ? Capabilities.NEED_SWITCH : i == 1 ? Capabilities.NEED_SCREENSAVER
-                            : i == 5 ? Capabilities.NEED_REMOTE_BUTTONS
-                            : i == 6 ? Capabilities.NEED_ADB : null;
+                            : i == 5 ? Capabilities.NEED_INPUTS
+                            : i == 6 ? Capabilities.NEED_REMOTE_BUTTONS
+                            : i == 7 ? Capabilities.NEED_ADB : null;
                 case HOME_SETTINGS:
                     return pickScroll + i == PLAYING_ROW ? Capabilities.NEED_LISTENER
                             : pickScroll + i == HOME_ROW ? Capabilities.NEED_HOME_ASSISTANT
                             : pickScroll + i == POWER_ON_ROW ? Capabilities.NEED_LIVE_TV
+                            : pickScroll + i == LIVE_BUTTON_ROW ? Capabilities.NEED_HDMI
                             : pickScroll + i == SAVER_ROW ? Capabilities.NEED_SCREENSAVER : null;
                 case POWER: {
                     int id = powerRows()[i];
@@ -1211,7 +1242,7 @@ public class SettingsActivity extends Activity {
                 }
                 case SHELF_EDIT: {   // only to add it: one already among the buttons can still move or go
                     String key = shelfRows.get(pickScroll + i)[0];
-                    if (!editingTop || shelfOrder.contains(key)) return null;
+                    if (editingInputs || !editingTop || shelfOrder.contains(key)) return null;
                     return HomeApps.TOP_LIVE.equals(key) ? Capabilities.NEED_LIVE_TV
                             : HomeApps.TOP_STORE.equals(key) ? Capabilities.NEED_APP_STORE : null;
                 }
@@ -1341,14 +1372,14 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] listLabels() {
-            if (screen == AIO) return aioLabels();
+            if (screen == AIO) return aioSettings.labels();
             if (screen == SAVER) return new String[] {Ui.tr("Screensaver"), Ui.tr("Starts after"),
                     Ui.tr("Request button"), Ui.tr("Photo layout"), Ui.tr("Screensaver source"), Ui.tr("Preview")};
             return screen == REMOTE_KEYS ? keyLabels() : screen == POWER ? powerLabels() : screen == PICKS ? picksLabels() : settingLabels();
         }
 
         private String[] listValues() {
-            if (screen == AIO) return aioValues();
+            if (screen == AIO) return aioSettings.values();
             if (screen == SAVER) return new String[] {onOff(saverOn), SleepTimer.duration(saverAfter / 60_000),
                     pickSaverKey ? Ui.tr("Press the button. Back cancels.") : Prefs.saverButtonName(),
                     Prefs.saverCollage() ? Ui.tr("Photo collage") : Ui.tr("Full screen"),
@@ -1375,30 +1406,6 @@ public class SettingsActivity extends Activity {
                     dist = d;
                 }
             }
-        }
-
-        private String[] aioLabels() {
-            if (Prefs.aioPaired()) return new String[] {Ui.tr("Connect with AIO"), Ui.tr("Search and request"),
-                    Ui.tr("Test connection"), Ui.tr("Disconnect AIO")};
-            return new String[] {Ui.tr("Connect with AIO"), Ui.tr("AIO server"), Ui.tr("Username"), Ui.tr("Password"),
-                    Ui.tr("Jellyfin server"), Ui.tr("Jellyfin API key"),
-                    Ui.tr("Search and request"), Ui.tr("Test connection")};
-        }
-
-        private String[] aioValues() {
-            String host = Prefs.aioUrl();
-            String status = aioBusy ? Ui.tr("Checking…") : (aioStatus.isEmpty() ? "›" : aioStatus);
-            if (Prefs.aioPaired()) return new String[] {host, "›", status, "›"};
-            return new String[] {
-                    "›",
-                    host.isEmpty() ? Ui.tr("Not set") : host,
-                    Prefs.aioUser().isEmpty() ? Ui.tr("Not set") : Prefs.aioUser(),
-                    Prefs.aioPasswordSet() ? "••••" : Ui.tr("Not set"),
-                    Prefs.jellyfinUrl().isEmpty() ? Ui.tr("Not set") : Prefs.jellyfinUrl(),
-                    Prefs.jellyfinKeySet() ? "••••" : Ui.tr("Not set"),
-                    "›",
-                    aioBusy ? Ui.tr("Checking…") : (aioStatus.isEmpty() ? "›" : aioStatus)
-            };
         }
 
         private static String onOff(boolean on) {
@@ -1615,6 +1622,14 @@ public class SettingsActivity extends Activity {
                     Prefs.setPowerOn(Prefs.POWER_ON[(at + dir + Prefs.POWER_ON.length) % Prefs.POWER_ON.length]);
                     return;
                 }
+                case LIVE_BUTTON_ROW: {   // Live TV, then every HDMI input the TV lists (the drawer's, dimmed ones too)
+                    List<String> ids = new ArrayList<>();
+                    ids.add("");
+                    for (HomeApps.Item it : HomeApps.allInputs(getContext())) if (it.inputId != null) ids.add(it.inputId);
+                    int at = Math.max(0, ids.indexOf(Prefs.liveButton()));
+                    Prefs.setLiveButton(ids.get((at + dir + ids.size()) % ids.size()));
+                    return;   // nothing the weather or the prices depend on
+                }
                 case ANDROID_APPS_ROW: Prefs.setAndroidApps(!Prefs.androidApps()); break;
                 case STATUS_ICONS_ROW: {
                     boolean on = !Prefs.statusIcons();
@@ -1718,166 +1733,6 @@ public class SettingsActivity extends Activity {
             pickScroll = Math.max(0, Math.min(row - 3, rows - Math.min(SETTINGS_VISIBLE, rows)));
             focus = row - pickScroll;
             screen = HOME_SETTINGS;
-        }
-
-        private void activateAio() {
-            if (aioBusy) return;
-            if (focus == 0) { openKeyScreen(true); return; }
-            if (Prefs.aioPaired()) {
-                if (focus == 1) searchAio();
-                else if (focus == 2) testAio();
-                else {
-                    aioBusy = true;
-                    new Thread(() -> {
-                        String why = Aio.unpair();
-                        handler.post(() -> {
-                            aioBusy = false;
-                            aioStatus = why == null ? Ui.tr("Disconnected") : why;
-                            focus = 0;
-                            invalidate();
-                        });
-                    }, "aio-unpair").start();
-                }
-                return;
-            }
-            switch (focus - 1) {
-                case 0: editAio(0); break;
-                case 1: editAio(1); break;
-                case 2: editAio(2); break;
-                case 3: editAio(3); break;
-                case 4: editAio(4); break;
-                case 5: searchAio(); break;
-                default: testAio();
-            }
-        }
-
-        private void editAio(int which) {
-            EditText field = new EditText(activity);
-            field.setSingleLine(true);
-            String title;
-            if (which == 0) {
-                title = Ui.tr("AIO server");
-                field.setText(Prefs.aioUrl());
-                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-            } else if (which == 1) {
-                title = Ui.tr("Username");
-                field.setText(Prefs.aioUser());
-                field.setInputType(InputType.TYPE_CLASS_TEXT);
-            } else if (which == 2) {
-                title = Ui.tr("Password");
-                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            } else if (which == 3) {
-                title = Ui.tr("Jellyfin server");
-                field.setText(Prefs.jellyfinUrl());
-                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-            } else {
-                title = Ui.tr("Jellyfin API key");
-                field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-            }
-            field.setImeOptions(EditorInfo.IME_ACTION_DONE);
-            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle(title)
-                    .setView(field)
-                    .setPositiveButton(Ui.tr("Save"), (d, w) -> saveAio(which, field.getText().toString()))
-                    .setNegativeButton(Ui.tr("Cancel"), null)
-                    .create();
-            field.setOnEditorActionListener((v, action, event) -> {
-                dialog.dismiss();
-                saveAio(which, field.getText().toString());
-                return true;
-            });
-            dialog.show();
-        }
-
-        private void saveAio(int which, String value) {
-            if (which == 0) Prefs.setAioUrl(value);
-            else if (which == 1) Prefs.setAioUser(value);
-            else if (which == 2) Prefs.setAioPassword(value);
-            else if (which == 3) Prefs.setJellyfinUrl(value);
-            else Prefs.setJellyfinKey(value);
-            aioStatus = "";
-            Recs.get(getContext()).refreshIfStale();
-            invalidate();
-        }
-
-        private void testAio() {
-            if (aioBusy) return;
-            aioBusy = true;
-            aioStatus = "";
-            invalidate();
-            new Thread(() -> {
-                String msg = Aio.test();
-                handler.post(() -> {
-                    aioBusy = false;
-                    aioStatus = msg;
-                    Recs.get(getContext()).refreshIfStale();
-                    invalidate();
-                });
-            }, "aio-test").start();
-        }
-
-        private void searchAio() {
-            EditText field = new EditText(activity);
-            field.setSingleLine(true);
-            field.setHint(Ui.tr("Type a title"));
-            field.setImeOptions(EditorInfo.IME_ACTION_SEARCH);
-            AlertDialog dialog = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                    .setTitle(Ui.tr("Search and request"))
-                    .setView(field)
-                    .setPositiveButton(Ui.tr("Search"), (d, w) -> runAioSearch(field.getText().toString()))
-                    .setNegativeButton(Ui.tr("Cancel"), null)
-                    .create();
-            field.setOnEditorActionListener((v, action, event) -> {
-                dialog.dismiss();
-                runAioSearch(field.getText().toString());
-                return true;
-            });
-            dialog.show();
-        }
-
-        private void runAioSearch(String query) {
-            aioBusy = true;
-            invalidate();
-            new Thread(() -> {
-                try {
-                    java.util.List<Aio.Hit> hits = Aio.search(query);
-                    handler.post(() -> {
-                        aioBusy = false;
-                        invalidate();
-                        if (hits.isEmpty()) {
-                            Toast.makeText(getContext(), Ui.tr("No titles found."), Toast.LENGTH_LONG).show();
-                            return;
-                        }
-                        String[] labels = new String[hits.size()];
-                        for (int i = 0; i < hits.size(); i++) labels[i] = hits.get(i).title;
-                        new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                                .setTitle(Ui.tr("Search and request"))
-                                .setItems(labels, (d, which) -> requestHit(hits.get(which)))
-                                .setNegativeButton(Ui.tr("Cancel"), null)
-                                .show();
-                    });
-                } catch (Exception e) {
-                    String msg = e.getMessage() == null ? e.toString() : e.getMessage();
-                    handler.post(() -> {
-                        aioBusy = false;
-                        aioStatus = msg;
-                        invalidate();
-                    });
-                }
-            }, "aio-search").start();
-        }
-
-        private void requestHit(Aio.Hit hit) {
-            if (!hit.canRequest) {
-                Toast.makeText(getContext(), Ui.tr("Already in your library."), Toast.LENGTH_LONG).show();
-                return;
-            }
-            new Thread(() -> {
-                String err = Aio.request(hit.kind, hit.id);
-                handler.post(() -> Toast.makeText(getContext(),
-                        err == null ? Ui.tr("Requested. It will show up in Recently added.") : err,
-                        Toast.LENGTH_LONG).show());
-            }, "aio-request").start();
         }
 
         // MARK: - TMDB key (from a phone through KeyPage's QR code, or typed with the remote)
@@ -2476,6 +2331,7 @@ public class SettingsActivity extends Activity {
 
         private void openShelfEditor(boolean top) {
             editingTop = top;
+            editingInputs = false;
             shelfOrder.clear();
             if (top) {
                 shelfOrder.addAll(HomeApps.topButtonKeys());
@@ -2492,10 +2348,21 @@ public class SettingsActivity extends Activity {
             screen = SHELF_EDIT;
         }
 
+        private void openInputsEditor() {
+            editingTop = false;
+            editingInputs = true;
+            shelfOrder.clear();
+            for (HomeApps.Item it : HomeApps.orderedInputs(getContext())) shelfOrder.add(it.key);
+            rebuildShelfRows(HomeApps.inputCandidates(getContext()));
+            pickScroll = 0;
+            focus = 0;
+            screen = SHELF_EDIT;
+        }
+
         /** The order row (shelf only), then selected apps, in shelf order, then the rest in the order they came. */
         private void rebuildShelfRows(List<String[]> candidates) {
             shelfRows.clear();
-            if (!editingTop) shelfRows.add(new String[] {ORDER_ROW, Ui.tr("Shelf order")});
+            if (!editingTop && !editingInputs) shelfRows.add(new String[] {ORDER_ROW, Ui.tr("Shelf order")});
             for (String pkg : shelfOrder) {
                 for (String[] cand : candidates) if (cand[0].equals(pkg)) { shelfRows.add(cand); break; }
             }
@@ -2506,7 +2373,7 @@ public class SettingsActivity extends Activity {
 
         /** The shelf puts the last app opened first, so the places set here don't apply (and can't be changed). */
         private boolean shelfOrderLocked() {
-            return !editingTop && Prefs.shelfRecent();
+            return !editingTop && !editingInputs && Prefs.shelfRecent();
         }
 
         /** "My order" deletes the list of apps opened: nothing is kept while the shelf doesn't use it. */
@@ -2532,24 +2399,40 @@ public class SettingsActivity extends Activity {
                 focus = i - pickScroll;
                 break;
             }
-            if (editingTop) Prefs.setTopButtons(shelfOrder); else Prefs.setShelf(shelfOrder);
+            if (editingTop) Prefs.setTopButtons(shelfOrder);
+            else if (editingInputs) saveInputsOrder();
+            else Prefs.setShelf(shelfOrder);
+        }
+
+        /** The order keeps the place of inputs the TV no longer lists; a hidden one stays hidden until it's shown. */
+        private void saveInputsOrder() {
+            List<String> saved = Prefs.inputsOrder();
+            Prefs.setInputsOrder(VisibleOrder.replace(saved == null ? shelfOrder : saved, shelfOrder));
+            List<String> hidden = new ArrayList<>(Prefs.inputsHidden());
+            hidden.removeAll(shelfOrder);
+            for (String[] row : shelfRows) {
+                if (!shelfOrder.contains(row[0]) && !hidden.contains(row[0])) hidden.add(row[0]);
+            }
+            Prefs.setInputsHidden(hidden);
         }
 
         /** OK: puts the app on the shelf (at the end) or takes it off. */
         private void toggleShelfApp() {
+            if (pickScroll + focus >= shelfRows.size()) return;   // an empty list has no row under OK
             String pkg = shelfRows.get(pickScroll + focus)[0];
             if (pkg.equals(ORDER_ROW)) {
                 switchShelfOrder();
                 return;
             }
             if (shelfOrder.contains(pkg)) shelfOrder.remove(pkg);
-            else if (editingTop || shelfOrder.size() < HomeApps.maxShelf(getContext())) shelfOrder.add(pkg);
+            else if (editingTop || editingInputs || shelfOrder.size() < HomeApps.maxShelf(getContext())) shelfOrder.add(pkg);
             else return;
             refreshShelfRows(pkg);
         }
 
         /** ← → : moves a shelf app one place earlier or later. */
         private void moveShelfApp(int dir) {
+            if (pickScroll + focus >= shelfRows.size()) return;
             String pkg = shelfRows.get(pickScroll + focus)[0];
             if (pkg.equals(ORDER_ROW)) {   // two values: either arrow switches
                 switchShelfOrder();
@@ -2565,7 +2448,8 @@ public class SettingsActivity extends Activity {
 
         private void drawShelfEditor(Canvas c) {
             Paint heading = Ui.text(Ui.displaySemibold, 34 * k, 0xFFFFFFFF);
-            c.drawText(editingTop ? Ui.tr("Top Buttons") : Ui.tr("Shelf"), LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
+            c.drawText(editingTop ? Ui.tr("Top Buttons") : editingInputs ? Ui.tr("Inputs") : Ui.tr("Shelf"),
+                    LIST_X * k + 30 * k, (LIST_TOP - 24) * k, heading);
             int rows = rowCount();
             boolean locked = shelfOrderLocked();
             for (int i = 0; i < rows; i++) {
@@ -2601,11 +2485,12 @@ public class SettingsActivity extends Activity {
             }
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
             float hy = (LIST_TOP + 20 + rows * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
-            if (!editingTop && HomeApps.lowRam(getContext())) {
+            if (!editingTop && !editingInputs && HomeApps.lowRam(getContext())) {
                 c.drawText(Ui.tr("This TV has little memory, so the shelf holds fewer apps."), LIST_X * k + 30 * k, hy + 38 * k, hint);
             }
             int max = HomeApps.maxShelf(getContext());
             c.drawText(editingTop ? Ui.tr("OK adds or removes a button. ← → change the order.")
+                    : editingInputs ? Ui.tr("OK shows or hides an input. ← → change the order.")
                     : locked && max == Integer.MAX_VALUE ? Ui.tr("OK adds or removes an app. The last one opened comes first.")
                     : locked ? Ui.trf("OK adds or removes (up to {n}). The last one opened comes first.", "n", max)
                     : max == Integer.MAX_VALUE ? Ui.tr("OK adds or removes an app. ← → change the order.")
@@ -2848,7 +2733,7 @@ public class SettingsActivity extends Activity {
             } else if (screen == HOME_SETTINGS && pickScroll + focus == aioRow()) {
                 openAioScreen();
             } else if (screen == AIO) {
-                activateAio();
+                aioSettings.activate(focus);
                 return;
             } else if (screen == HOME_SETTINGS && (pickScroll + focus == keyRow() || pickScroll + focus == watchmodeRow())) {
                 openKeyScreen(false, pickScroll + focus == watchmodeRow());
@@ -2917,11 +2802,13 @@ public class SettingsActivity extends Activity {
             } else if (focus == 4) {
                 openShelfEditor(true);
             } else if (focus == 5) {
+                openInputsEditor();
+            } else if (focus == 6) {
                 HomeMode.ensureRemoteService(c, 0);   // the buttons work from inside other apps through this service
                 loadApps();
                 screen = REMOTE_KEYS;
                 focus = 0;
-            } else if (focus == 6) {
+            } else if (focus == 7) {
                 pickScroll = 0;
                 screen = POWER;
                 focus = 0;

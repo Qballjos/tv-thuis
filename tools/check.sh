@@ -18,28 +18,12 @@ esac
 if [ "$what" = all ] || [ "$what" = android ]; then
   ./build.sh
   bash tools/test-remote.sh
-  bash tools/test-recent.sh
-  bash tools/check-profiles.sh
-  bash tools/check-watch-next.sh
-  bash tools/check-photo-collage.sh
-  bash tools/check-immich-source.sh
-  bash tools/check-key-pages.sh
-  bash tools/check-aio-pairing.sh
-  bash tools/check-aio-library.sh
-  bash tools/check-fork-media.sh
   bash tools/test-order.sh
-  bash tools/check-recs-services.sh
-  bash tools/check-media-order.sh
+  bash tools/test-net.sh
 fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then
-  python3 tools/test-release-version.py
-  python3 tests/test_fork_package.py
-  python3 tests/test_translation_overlays.py
-  python3 tests/test_upstream_sync.py
   python3 tools/translate.py --check
-  node tools/test-aio-library.js
-  node tools/test-artwork.js
   bash tools/test-web.sh
 
   # The generic LG and Samsung packages land where your own build leaves yours (with your city and TMDB key):
@@ -66,3 +50,6 @@ if [ "$what" = all ] || [ "$what" = web ]; then
 fi
 
 echo "All checks passed."
+
+# Household extensions are checked separately so upstream keeps its own checklist.
+bash tools/check-fork.sh "$what"

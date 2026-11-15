@@ -4,6 +4,15 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+## 1.3.13
+
+- AIO, instellingen en screensaverkeuzes zijn ondergebracht in eigen modules, zodat upstream-wijzigingen
+  minder vaak dezelfde code raken. De bestaande functies blijven behouden.
+- Eigen vertalingen en pakketgegevens staan apart; builds combineren die met de upstream-bestanden.
+- Upstream-updates worden volledig gebouwd en getest op een kandidaatbranch voordat main wordt bijgewerkt.
+  Een conflict, mislukte controle of gelijktijdige wijziging laat main en de bestaande release ongemoeid.
+- De actuele Free My TV-wijzigingen zijn samengevoegd, inclusief invoervolgorde en de nieuwe webfuncties.
+
 - Het Immich-serveradres uit een privébuild blijft bewaard bij een overstap naar de standaard release. Foto's
   via een lokaal HTTP-adres blijven werken zonder het thuisadres in een publieke APK op te nemen.
 

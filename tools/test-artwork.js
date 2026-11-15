@@ -33,3 +33,31 @@ requested.shift().done('blob:stale');
 assert.equal(node.style.backgroundImage, 'url(new)', 'Late responses cannot replace the current title');
 assert(revoked.includes('blob:stale') && revoked.includes('blob:poster'), 'Release stale and replaced image objects');
 console.log('Artwork: failed/invalid landscape fallback, authenticated posters and stale-response isolation passed.');
+
+// The upstream title-link launch and reordered inputs must coexist with fork AIO cards.
+const activated = [], notices = [];
+const integration = vm.createContext({
+  Z: {TOP: 1, CARDS: 2, SHELF: 3}, st: {zone: 2, card: 0}, cards: [],
+  Data: {requestTitle: (kind, id, done) => { activated.push(['request', kind, id]); done(null); }, refresh: () => activated.push(['refresh'])},
+  tr: text => text, toast: text => notices.push(text),
+  playerApp: () => ({id: 'player', title: 'Wholphin'}),
+  launcher: id => () => activated.push(['launch', id]),
+  pickTarget: p => ({app: {id: p.app}}), openTarget: (p, target) => activated.push(['target', p.id, target.app.id]),
+  tabCount: () => 5, openDrawer: () => {}, firstPort: () => 3, updateFocus: () => {}
+});
+vm.runInContext(source.slice(source.indexOf('  function activate() {'), source.indexOf('  function selectTab(')), integration);
+integration.cards = [{id: 123, app: 'prime'}];
+integration.activate();
+assert.deepEqual(activated.shift(), ['target', 123, 'prime'], 'Ordinary picks use upstream title-link launching');
+integration.cards = [{aio: true, canRequest: true, kind: 'tv', mediaId: 456}];
+integration.activate();
+assert.deepEqual(activated.shift(), ['request', 'tv', 456]);
+assert.deepEqual(activated.shift(), ['refresh']);
+assert.equal(integration.cards[0].canRequest, false);
+integration.cards = [{aio: true, canRequest: false}];
+integration.activate();
+assert.deepEqual(activated.shift(), ['launch', 'player'], 'Library cards retain the fork player launch');
+integration.st.zone = integration.Z.TOP; integration.st.top = 6;
+integration.activate();
+assert.equal(integration.st.drawer, 3, 'HDMI button uses upstream input ordering after five fork tabs');
+console.log('Merged controls: title links, AIO requests/player and reordered HDMI focus passed.');

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID = '{http://schemas.android.com/apk/res/android}'
@@ -77,7 +78,8 @@ def tizen_manifest(source, info=None):
     info = info or load()
     if 'id="FreeMyTVio.FreeMyTV"' not in source:
         raise ValueError('Upstream Tizen ID changed: review installed-app compatibility')
-    return re.sub(r'(<widget\b[^>]*\bversion=")[^"]+', lambda m: m[1]+info['version'], source, count=1)
+    staged = re.sub(r'(<widget\b[^>]*\bversion=")[^"]+', lambda m: m[1]+info['version'], source, count=1)
+    return re.sub(r'(<name>)[^<]*(</name>)', lambda m: m[1]+escape(info['title'])+m[2], staged, count=1)
 
 
 def stage(output):

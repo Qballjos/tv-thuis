@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 function fixture(device, language, clock, legacy) {
-  const context = vm.createContext({window: {I18N_CATALOGUES: {nl: JSON.parse(fs.readFileSync('app/assets/i18n/nl.json', 'utf8'))}},
+  const context = vm.createContext({window: {I18N_CATALOGUES: {nl: JSON.parse(fs.readFileSync('app/assets/i18n/nl.json', 'utf8')), ar: JSON.parse(fs.readFileSync('app/assets/i18n/ar.json', 'utf8'))}},
     navigator: {language: device}, document: {documentElement: {}}, Intl: legacy ? undefined : Intl});
   vm.runInContext(fs.readFileSync('web/strings.js', 'utf8'), context);
   context.I18N.set(language); context.I18N.setClock(clock);
@@ -29,3 +29,10 @@ assert.equal(clock.regionalClock(at), '19:08', 'Legacy TV without Intl preserves
 clock = fixture('en-AU', 'en', 'auto', true);
 assert.match(clock.regionalClock(at), /7:08.*PM/, 'Legacy Australian region keeps its 12-hour clock');
 console.log('Regional clock: GB/US/NL regions, date order, manual overrides and legacy fallback passed.');
+
+clock = fixture('ar-SA', 'ar', '24');
+assert.match(clock.regionalDate(at), /نوفمبر/, 'Arabic header keeps Gregorian months alongside the upstream clock');
+clock = fixture('ar-SA', 'ar', '24', true);
+assert.equal(clock.regionalClock(at), '١٩:٠٨', 'Legacy Arabic custom header uses Arabic digits');
+assert.equal(clock.rtl, true);
+assert.equal(clock.name('Disney+'), '\u200eDisney+\u200e');

@@ -2,7 +2,7 @@
 
 ## Scope and authorization
 
-Use this guide for development and maintenance of Qballjos/tv-thuis. Read CLAUDE.md for architecture,
+Use this guide for development and maintenance of Qballjos/tv-thuis. Read fork/DEVELOPMENT.md for household-specific rules, then CLAUDE.md for upstream architecture,
 compatibility requirements, security rules, and TV-specific behavior. Its installation walkthroughs apply
 when installing or operating a TV, not when managing this repository.
 
@@ -15,6 +15,9 @@ unless the user requests it. Never expose credentials or commit config.propertie
 ## Project map
 
 - app/: Android TV and Google TV app, Java 8 language level; build.sh builds without Gradle.
+- fork/: household package identity, Android manifest additions, and development rules.
+- app/assets/fork-i18n/: household translations layered over unchanged upstream catalogues.
+- FORK.md: household user guide; README.md and CLAUDE.md follow upstream.
 - web/: shared ES5 web app for LG and Samsung; preserve support for older TV browsers.
 - webos/ and tizen/: packaging and device installation tools.
 - docs/: published website; keep English and Portuguese pages in step when changing their content.
@@ -84,8 +87,18 @@ versionCode in the build; it never commits those generated values back, avoiding
 checks for the currently released commit does not create a second release. Development commits can be
 grouped into one tested main update; do not rewrite history to retrofit versions onto existing commits.
 
-When explicitly setting a source version for an update, keep app/AndroidManifest.xml, webos/appinfo.json
-and tizen/config.xml in step. Never publish an APK signed with a temporary development key: the release
-workflow uses and verifies the existing TV update certificate. Upstream bot pushes must explicitly dispatch
-Check, since pushes made with GITHUB_TOKEN do not trigger push workflows. Successful main dispatch checks
-are eligible for Release just like successful main push checks.
+Set household release versions only in fork/package.json. Build staging applies that version, display name,
+repository, and certificate to Android/webOS/Tizen packages without editing upstream manifests. Never publish
+an APK signed with a temporary development key: the release workflow verifies the existing TV update certificate.
+Upstream updates prepare a local candidate branch and run tools/check.sh before any remote push. Only a tested
+candidate extending the unchanged main may publish; atomic non-force pushes protect against races. Conflicts
+leave main untouched and upload a diagnostic artifact. Successful publication explicitly dispatches Check,
+since GITHUB_TOKEN pushes do not trigger push workflows; its successful main run can publish the release.
+
+## Maintaining the upstream boundary
+
+Keep household logic in AioRecommendations, SaverSources, web/fork-aio.js and other dedicated feature files.
+Preserve narrow hooks in upstream screens. Keep household translations in app/assets/fork-i18n, never in the
+upstream catalogues. tools/translate.py merges both layers and writes only overlays. Household checks belong
+in tools/check-fork.sh, called after the upstream checklist. Keep upstream README.md, CLAUDE.md, manifests and
+package templates unmodified; household guidance and staging overlays live in FORK.md and fork/.

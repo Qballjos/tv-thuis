@@ -1,5 +1,4 @@
-# Brings new Free My TV versions into this fork. A clean merge is pushed to main. A conflict
-# stops the run, so the household media manager is never overwritten by a forced update.
+# Test an isolated upstream candidate before publishing either candidate or main.
 name: Upstream
 
 on:
@@ -17,25 +16,59 @@ concurrency:
 
 jobs:
   merge:
-    name: Merge Free My TV
+    name: Check and merge Free My TV
     runs-on: ubuntu-latest
+    env:
+      # build.sh replaces out/; keep merge evidence outside the checkout.
+      UPSTREAM_STATE: ${{ runner.temp }}/upstream-state.json
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Merge upstream main
-        env:
-          GH_TOKEN: ${{ github.token }}
+          persist-credentials: false
+      - name: Prepare local upstream candidate
+        id: prepare
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/simbasjungles/free-my-tv.git
-          git fetch upstream main
-          if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "Already on the latest Free My TV."
-            exit 0
-          fi
-          git merge upstream/main -m "Merge upstream Free My TV."
-          git push origin HEAD
-          # GITHUB_TOKEN pushes do not trigger push workflows; explicitly check the new main for its release.
+          python3 tools/upstream_sync.py prepare --state "$UPSTREAM_STATE"
+      - uses: actions/setup-java@v5
+        if: steps.prepare.outputs.needed == 'true'
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: actions/setup-node@v6
+        if: steps.prepare.outputs.needed == 'true'
+        with:
+          node-version: "24"
+      - name: Android SDK (build-tools 34, android-34)
+        if: steps.prepare.outputs.needed == 'true'
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --sdk_root="$RUNNER_TEMP/sdk" \
+            "build-tools;34.0.0" "platforms;android-34" > /dev/null
+          echo "ANDROID_HOME=$RUNNER_TEMP/sdk" >> "$GITHUB_ENV"
+      # No GitHub credentials are configured during candidate checks.
+      - name: Check complete candidate
+        id: check
+        if: steps.prepare.outputs.needed == 'true'
+        run: tools/check.sh
+      - name: Publish tested candidate and main
+        if: steps.prepare.outputs.needed == 'true' && steps.check.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TESTED_HEAD: ${{ steps.prepare.outputs.head }}
+        run: |
+          gh auth setup-git
+          python3 tools/upstream_sync.py publish --state "$UPSTREAM_STATE" --tested-head "$TESTED_HEAD"
+          # GITHUB_TOKEN pushes do not trigger Check; its explicit run can release the checked main.
           gh workflow run check.yml --ref main --repo "$GITHUB_REPOSITORY"
+      - name: Keep upstream conflict report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-conflict-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/upstream-state.json
+            ${{ runner.temp }}/upstream-state.conflict.txt
+          if-no-files-found: ignore
+          retention-days: 30

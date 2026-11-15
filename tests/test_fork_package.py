@@ -48,4 +48,13 @@ class ForkPackageTest(unittest.TestCase):
         self.assertIn('https://api.github.com/repos/Qballjos/tv-thuis/releases/latest', generated)
         self.assertIn('94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138', generated)
 
+    def test_tizen_title_and_version_are_staged_without_changing_identity(self):
+        m = self.module()
+        source = (ROOT/'tizen/config.xml').read_text()
+        result = m.tizen_manifest(source, {'version':'1.3.13','title':'TV Thuis'})
+        self.assertIn('version="1.3.13"', result)
+        self.assertIn('<name>TV Thuis</name>', result)
+        self.assertIn('id="FreeMyTVio.FreeMyTV"', result)
+        self.assertIn('<name>Free My TV</name>', source)
+
 if __name__ == '__main__': unittest.main()
