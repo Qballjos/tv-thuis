@@ -4,6 +4,11 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+## 1.3.14
+
+- GitHub-workflows worden nu ook gecontroleerd met actionlint, zowel bij gewone checks als voor een
+  upstream-kandidaat. De tijdelijke syncstatus wordt op de juiste stap aangemaakt.
+
 ## 1.3.13
 
 - AIO, instellingen en screensaverkeuzes zijn ondergebracht in eigen modules, zodat upstream-wijzigingen
