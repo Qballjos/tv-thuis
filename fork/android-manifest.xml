@@ -1,0 +1,12 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <queries>
+        <package android:name="com.github.damontecres.wholphin" />
+        <package android:name="com.github.damontecres.wholphin.debug" />
+        <package android:name="org.jellyfin.androidtv" />
+        <package android:name="org.jellyfin.androidtv.firetv" />
+    </queries>
+    <application android:usesCleartextTraffic="true">
+        <activity android:name=".ProfileManagerActivity" android:process=":home" android:exported="false"
+            android:excludeFromRecents="true" android:screenOrientation="landscape" android:theme="@style/FreeMyTV.Home" />
+    </application>
+</manifest>

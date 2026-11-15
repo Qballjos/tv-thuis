@@ -42,11 +42,11 @@ import java.security.MessageDigest;
 final class Updates {
     private Updates() {}
 
-    private static final String LATEST = "https://api.github.com/repos/Qballjos/tv-thuis/releases/latest";
+    private static final String LATEST = ForkBuild.LATEST;
     // The only place the APK may come from: this fork's releases (github.com redirects to its download host).
-    private static final String RELEASES = "https://github.com/Qballjos/tv-thuis/releases/download/";
+    private static final String RELEASES = ForkBuild.RELEASES;
     // freemytv.keystore, as `apksigner verify --print-certs` shows it: only APKs signed with it come in.
-    private static final String RELEASE_CERT = "94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138";
+    private static final String RELEASE_CERT = ForkBuild.RELEASE_CERT;
     private static final String ASSET = "FreeMyTV.apk";
     private static final long MAX_SIZE = 30L << 20;   // the APK is about 1.5 MB
     private static final long WEEK = 7 * 24 * 3600_000L;

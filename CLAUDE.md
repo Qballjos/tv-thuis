@@ -219,12 +219,6 @@ Developer Mode; Samsung's home screen stays. Two ways:
 
 ## Releases
 
-This fork publishes automatically after the `Check` workflow succeeds for a push to `main`. The release workflow
-checks out that exact commit, increments the latest published patch version (or uses a higher source version), and
-sets an increasing Android version code in the build manifest. These generated version values are not committed
-back, avoiding a release loop. Re-running checks for an already published commit does not release it again.
-
-
 Every release carries `FreeMyTV.apk` for Google TV and Android TV, built with `./build.sh --generic` (no
 config.properties: no key, and `Place` takes the city, the currency and the region from the TV's time zone through
 `app/assets/zones.json`) and signed with the project's release key, which lives only on the owner's Mac
@@ -238,12 +232,11 @@ TizenBrew Installer takes the first `.wgt` of the latest GitHub release, so ever
 with a Tizen certificate (`--sign`), which 2017-2022 TVs install as it is; on 2023+ TVs the installer signs it again
 with the person's Samsung certificate. Sign every release with the same author certificate: older TVs refuse an
 update signed by another. `python3 webos/build.py --generic` makes the LG `.ipk` that goes along.
-This fork's `FreeMyTV.apk` updates itself from Qballjos/tv-thuis (`Updates`: a weekly job, and Home Settings >
-Updates): it reads that repo's `releases/latest`, so keep the asset named `FreeMyTV.apk`, sign it with
-`freemytv.keystore` (the key already on these TVs, not the upstream release key), and raise `versionName`
+The release's `FreeMyTV.apk` updates itself (`Updates`: a weekly job, and Home Settings > Updates): it reads
+`releases/latest`, so keep the asset named `FreeMyTV.apk`, sign it with the project's key, and raise `versionName`
 (compared number by number with the tag, `v1.3.0` > `1.2`) and `versionCode` (Android refuses a lower one). Before
-uploading, `apksigner verify --print-certs FreeMyTV.apk` must show this fork's certificate
-(`94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138`, `Updates.RELEASE_CERT`): TVs refuse any other. Then
+uploading, `apksigner verify --print-certs FreeMyTV.apk` must show the release certificate
+(`b85d4ff69cb42bfb1837ee0279506363954470b16402a4165f2f095886d19204`, `Updates.RELEASE_CERT`): TVs refuse any other. Then
 `python3 tools/homebrew_repo.py <the uploaded FreeMyTV-webos.ipk>` writes `docs/webos/apps.json`, the webOS Homebrew
 Channel repository (https://freemytv.io/webos/apps.json, with that file's SHA-256), and a copy of the `.ipk` beside it:
 commit both with the release. The Channel installs from freemytv.io, not from the GitHub release, because GitHub's
@@ -288,19 +281,6 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
 
 ## The code
 
-- AIO pairing uses the existing temporary `KeyPage` QR form with a one-use AIO dashboard link. `AioPairing` validates
-  the origin/link and saves a scoped device token atomically; legacy manual login remains available. Device credentials
-  (`aioDeviceId` included) are shared across launcher profiles. Paired Continue Watching goes through AIO, with no
-  Jellyfin key on the TV. `Aio.test` must never discard a paired token. Server administration is outside its scope.
-  AIO home tabs are Resume, Recent, Movies (owned library), Shows (owned library), Trending (requestable picks).
-  Library pages append by stable item ID as focus nears the end; never apply recommendation/franchise limits to them.
-  Prepare only nearby card artwork and grow card springs/bounds outside drawing when pages append.
-  Recent rows sort by parsed addition date (ISO or Unix, newest first), never hourly rotation or franchise limits.
-  Resume refreshes separately every minute. Older AIO poster-only trending rows may use the existing TMDB key for
-  landscape art; failed or undecodable landscape downloads must fall back to the poster.
-  `AioHttp` keeps HTTPS certificate checks and disables credential redirects. Runtime plain HTTP is pinned to private
-  IPv4 addresses at the socket boundary; never relax global `network_security_config` for arbitrary hosts.
-
 - Java 8 language level, minSdk 26 (Android 8), targetSdk 33. No Gradle, no libraries: only the Android SDK.
   Android 9 and older have no RenderNode (`Recording` wraps it, with a Picture there) and no `cmd role`. On Android 8 to 11,
   and on Android 12 and 12L under 3 GB of RAM (`Ui.LEGACY`), the home screen skips the GPU layers, draws blurred
@@ -329,10 +309,10 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   the home screen in memory under the app in front; the remote's key service lives in `:keys` (below).
   `Watchdog` goes back to the stock home screen after 3 crashes in 5 minutes.
   `Updates` (the release APK updating itself) runs there too: the week's check and Settings' OK are `ModeJob`s, one at
-  a time, and they write `update.json`, which Settings only reads. The download must be this fork's release asset on
-  Qballjos/tv-thuis (its size and SHA-256 as GitHub lists them), newer than the app (versionName and versionCode) and
-  signed with `freemytv.keystore` (`Updates.RELEASE_CERT`); Android's installer always asks. A build signed with
-  another key checks only when asked and never downloads.
+  a time, and they write `update.json`, which Settings only reads. The download must be this repository's release
+  asset (its size and SHA-256 as GitHub lists them), newer than the app (versionName and versionCode) and signed with
+  the release key (`Updates.RELEASE_CERT`); Android's installer always asks. A build made on a computer (not
+  `--generic`, or another key) checks only when asked and never downloads.
 - The TMDB key given on the TV (`Prefs.tmdbKey`) wins over `Config.TMDB_KEY`; read it through `Recs.key()`. Its screen
   serves a one-time page (`KeyPage`: the TV's private IPv4 on Wi-Fi or Ethernet, never a VPN's or a public one, a random
   port and token, one POST, 5 minutes, and only while that screen shows) behind a QR code (`Qr`, byte mode, level M, after
@@ -373,20 +353,12 @@ entries; its system pieces are in `PROTECTED`. USB debugging opens ADB on 5555 t
   (`app/assets/zones.json`, written by `tools/make_zones.py` with `web/zones.js`).
   What the person changes on the TV (`Prefs`: Home Settings, Shelf, Remote Buttons, Sleep Timer) wins over those first values.
 - `ImmichPhotos` (with `immich_server` and the key sent to that TV; without the key My Photos is unchanged): every 6
-  hours, on the home screen's resume or while the screensaver is showing, a random choice from the server (`POST /api/search/random`, or one album,
+  hours, on the home screen's resume, a random choice from the server (`POST /api/search/random`, or one album,
   `Prefs.photoSource`) is downloaded one photo at a time into `Photos.privateInbox` and imported right away, so at most
   one original is on disk (Immich's preview instead on low-RAM and 720p TVs). Nothing goes before something new came:
-  at `Photos.MAX` the oldest of Immich's make room (`-immich.jpg` names). `ImmichSource` snapshots the server/album for
-  the query, photo filename tag and refresh stamp. `Photos.files` exposes only that selection (manual photos only
-  outside album mode); untagged legacy caches stay hidden. A stale sync cannot mark a new album fresh or re-enable
-  photos. `tools/photos.py`'s are never deleted. Redirects are never followed (`x-api-key` would go
+  at `Photos.MAX` the oldest of Immich's make room (`-immich.jpg` names), a new source's photos replace the previous
+  one's as they arrive, and `tools/photos.py`'s are never touched. Redirects are never followed (`x-api-key` would go
   along to another host).
-- Screensaver's `Screensaver source` is per profile (`auto`, `aio`, `immich`): explicit sources never fall back to
-  other sources; empty/loading sources use the clock. Immich's collage uses the same filtered collection.
-  `Photo layout` is per profile: fullscreen stays the default; own photos take priority over AIO art.
-  An empty/loading selected album uses the clock fallback, never other photos or movie art.
-  `PhotoCollage` prepares up to three framed photos on the worker; the existing slideshow handles fades and keys.
-  Imports retain the full aspect ratio and capture date only (no GPS); older cropped copies still work.
 - Plain HTTP only to the user's own network: `build.sh` reads every server setting with `lan_server <key>` (now
   `immich_server`), which refuses an `http://` address that isn't private (10/8, 172.16/12, 192.168/16, `.local`,
   `.lan`, `.home.arpa`, a one-word name) and lists its host in the generated `network_security_config.xml`, the one

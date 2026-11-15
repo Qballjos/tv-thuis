@@ -167,10 +167,12 @@ mkdir -p out/res/xml
 
 # --- Build
 
+python3 tools/fork_package.py out
+
 "$BT/aapt2" compile --dir app/res -o out/res.zip
 "$BT/aapt2" compile --dir out/res -o out/res-gen.zip
 # Fonts uncompressed: Android reads them straight from the APK.
-"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest app/AndroidManifest.xml --java out/gen out/res.zip out/res-gen.zip \
+"$BT/aapt2" link -o out/base.apk -I "$AJ" --manifest out/AndroidManifest.xml --java out/gen out/res.zip -R out/res-gen.zip --auto-add-overlay \
   --min-sdk-version 26 --target-sdk-version 33 -A app/assets -0 ttf
 # Windows aapt2 packs assets with backslash separators ("assets/symbols\x.png") and Android
 # cannot find them: the home screen loses its icons and fonts. Rename the zip entries to "/".

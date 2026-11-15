@@ -207,9 +207,12 @@ final class Ui {
         found.add("en");
         Context c = Prefs.context();
         try {
-            String[] files = c == null ? null : c.getAssets().list("i18n");
-            for (String f : files == null ? new String[0] : files) {
-                if (f.endsWith(".json") && !f.equals("en.json")) found.add(f.substring(0, f.length() - 5));
+            for (String directory : new String[] {"i18n", "fork-i18n"}) {
+                String[] files = c == null ? null : c.getAssets().list(directory);
+                for (String f : files == null ? new String[0] : files) {
+                    String code = f.endsWith(".json") ? f.substring(0, f.length() - 5) : "en";
+                    if (!found.contains(code)) found.add(code);
+                }
             }
         } catch (IOException e) {
             AppLog.w("i18n: " + e.getMessage());
@@ -239,13 +242,10 @@ final class Ui {
     /** The same for a setting ("auto", "fr"…) given by the caller (SleepOverlay gets it in its Intent). */
     static synchronized void applyLanguage(String setting) {
         String lang = resolve(setting);
-        Map<String, String> cat = Collections.emptyMap();
-        if (!lang.equals("en")) {
-            cat = load(lang);
-            if (cat == null) {
-                lang = "en";
-                cat = Collections.emptyMap();
-            }
+        Map<String, String> cat = load(lang);
+        if (cat == null) {
+            lang = "en";
+            cat = Collections.emptyMap();
         }
         catalogue = cat;
         locale = localeOf(lang);
@@ -309,21 +309,31 @@ final class Ui {
     private static Map<String, String> load(String lang) {
         Context c = Prefs.context();
         if (c == null) return null;
-        try (InputStream in = c.getAssets().open("i18n/" + lang + ".json")) {
+        HashMap<String, String> map = new HashMap<>();
+        mergeCatalogue(c, "i18n", "en", map);
+        mergeCatalogue(c, "fork-i18n", "en", map);
+        if (!lang.equals("en")) {
+            mergeCatalogue(c, "i18n", lang, map);
+            mergeCatalogue(c, "fork-i18n", lang, map);
+        }
+        return map;
+    }
+
+    private static void mergeCatalogue(Context c, String directory, String lang, Map<String, String> map) {
+        String path = directory + "/" + lang + ".json";
+        if (!has(c.getAssets(), path)) return;
+        try (InputStream in = c.getAssets().open(path)) {
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             int n;
             while ((n = in.read(buffer)) > 0) out.write(buffer, 0, n);
             JSONObject o = new JSONObject(out.toString(StandardCharsets.UTF_8.name()));
-            HashMap<String, String> map = new HashMap<>(o.length() * 2);
             for (java.util.Iterator<String> keys = o.keys(); keys.hasNext(); ) {
                 String key = keys.next();
                 map.put(key, o.getString(key));
             }
-            return map;
         } catch (Exception e) {
-            AppLog.w("i18n " + lang + ": " + e.getMessage());
-            return null;
+            AppLog.w(path + ": " + e.getMessage());
         }
     }
 

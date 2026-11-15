@@ -7,6 +7,16 @@ import unittest
 SCRIPT = pathlib.Path(__file__).with_name('release-version.py')
 
 class ReleaseVersionTest(unittest.TestCase):
+    def test_fork_metadata_version_is_independent_of_upstream_manifest(self):
+        import json
+        with tempfile.TemporaryDirectory() as folder:
+            metadata = pathlib.Path(folder) / 'package.json'
+            metadata.write_text(json.dumps({'version':'1.3.13','title':'TV Thuis'}))
+            result = subprocess.run(['python3', str(SCRIPT), str(metadata), 'v1.3.13'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.strip(), '1.3.14')
+            self.assertEqual(json.loads(metadata.read_text()), {'version':'1.3.14','title':'TV Thuis'})
+
     def test_successive_releases_after_source_version_bump_increase_code(self):
         source = '<manifest android:versionCode="1030010" android:versionName="1.3.10">'
         numbers = []

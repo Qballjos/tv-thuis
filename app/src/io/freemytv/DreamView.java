@@ -297,13 +297,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
 
     // MARK: - Photos
 
-    /** An explicit album never falls back to unrelated art while loading or empty; own photos also win over AIO. */
-    private List<Recs.Pick> photos() {
-        if ("aio".equals(Prefs.saverSource())) return recs.aioShowcase();
-        if ("immich".equals(Prefs.saverSource())) return Photos.picks(getContext(), Photos.saverFiles(getContext()));
-        if (Prefs.photos() && "album".equals(Prefs.photoSource())) return Photos.picks(getContext());
-        return Photos.on(getContext()) ? Photos.picks(getContext()) : recs.showcase();
-    }
+    private List<Recs.Pick> photos() { return SaverSources.photos(getContext(), recs); }
 
     /** Loads the next photo in the background (one at a time); once ready, it comes in at the right moment. */
     private void prepareNext() {
@@ -861,20 +855,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     boolean watch() {
         Recs.Pick p = watchable();
         if (p == null) return false;
-        if (p.aio && p.canRequest) {
-            final String kind = p.kind;
-            final int id = p.id;
-            new Thread(() -> Aio.request(kind, id), "aio-request").start();
-            return true;
-        }
-        if (p.aio) {
-            String player = Aio.playerPackage(getContext());
-            if (player == null) return false;
-            if (Aio.viewInWholphin(getContext(), player, p.itemId)) return true;
-            boolean opened = HomeApps.open(getContext(), HomeApps.app(player, player.contains("plex") ? "Plex" : "Wholphin", null), null);
-            if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + player);
-            return opened;
-        }
+        if (p.aio) return SaverSources.watch(getContext(), p);
         boolean opened = HomeApps.open(getContext(), HomeApps.app(p.pkg, Recs.serviceName(p), p.link), null);
         if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + p.pkg);
         return opened;

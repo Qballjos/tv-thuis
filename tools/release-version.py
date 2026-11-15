@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Set the APK version above the latest published release, without committing generated changes."""
+import json
 import pathlib
 import re
 import sys
 
 path = pathlib.Path(sys.argv[1])
 text = path.read_text()
+metadata = json.loads(text) if path.suffix == '.json' else None
+if metadata is not None:
+    text = '<manifest android:versionName="'+metadata['version']+'" android:versionCode="0">'
 current = re.search(r'android:versionName="(\d+\.\d+\.\d+)"', text)
 code = re.search(r'android:versionCode="(\d+)"', text)
 latest = re.fullmatch(r'v?(\d+)\.(\d+)\.(\d+)', sys.argv[2])
@@ -26,5 +30,9 @@ if number > 2100000000:
 name = '.'.join(map(str, version))
 text = text[:code.start(1)] + str(number) + text[code.end(1):]
 text = re.sub(r'android:versionName="[^"]+"', 'android:versionName="' + name + '"', text, count=1)
-path.write_text(text)
+if metadata is not None:
+    metadata['version'] = name
+    path.write_text(json.dumps(metadata, indent=2) + '\n')
+else:
+    path.write_text(text)
 print(name)

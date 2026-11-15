@@ -124,6 +124,8 @@ def with_resolution(ipk, size):
 def build(preview, config, generic=False, hd=False):
     with open(os.path.join(ROOT, 'webos', 'appinfo.json'), encoding='utf-8') as f:
         info = json.load(f)
+    import fork_package
+    info = fork_package.webos_info(info)
     app_id, version = info['id'], info['version']
     apps, icons = ([], {}) if generic else tv_apps()   # one TV's list never goes in a release
     if apps:
@@ -133,6 +135,7 @@ def build(preview, config, generic=False, hd=False):
     for name in ('appinfo.json', 'icon.png', 'largeIcon.png'):
         with open(os.path.join(ROOT, 'webos', name), 'rb') as f:
             app[name] = f.read()
+    app['appinfo.json'] = json.dumps(info, indent=2).encode('utf-8')
     if hd:   # Full HD and HD LGs draw apps at 1280 x 720; asked for 1920 x 1080, some show them in the top left (#402)
         app['appinfo.json'] = json.dumps(dict(info, resolution='1280x720'), indent=2).encode('utf-8')
 

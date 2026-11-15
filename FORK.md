@@ -1,0 +1,241 @@
+# TV Thuis
+
+Startscherm voor de televisies in huis, gebaseerd op [Free My TV](https://github.com/simbasjungles/free-my-tv) (MIT). Zelfde app-plank, weer en nachtmodus.
+
+Dit is **niet** het officiële Free My TV-project. TV Thuis is een huis-fork. Het origineel: [simbasjungles/free-my-tv](https://github.com/simbasjungles/free-my-tv) · [freemytv.io](https://freemytv.io).
+
+Wat er per versie is gedaan: [docs/changelog.md](docs/changelog.md). Site: [qballjos.github.io/tv-thuis](https://qballjos.github.io/tv-thuis/).
+
+## AIO Media Server Manager
+
+TV Thuis gebruikt de functies van [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager) op het startscherm:
+
+| Functie | Wat de tv doet |
+| --- | --- |
+| Koppelen | QR + eenmalige koppellink; geen wachtwoord of Jellyfin-sleutel op de tv |
+| Verder kijken | In progress / next-up (via AIO of Jellyfin) |
+| Pas toegevoegd | Nieuw in de bibliotheek (Jellyfin / Plex via de manager) |
+| Films / Series | Eigen bibliotheek, pagina’s laden tijdens het bladeren |
+| Trending | Seerr-aanbevelingen; ontbrekende titels aanvragen |
+| Zoeken | Zoeken en aanvragen in Startscherm → AIO Media |
+| Plaatjes | Poster en backdrop via de manager (https) |
+
+De manager zelf staat in een aparte repo: **[Qballjos/aio-media-server-manager](https://github.com/Qballjos/aio-media-server-manager)**.
+
+## Bovenaan het scherm
+
+In **Startscherm → Bovenaan het scherm** kies je wat de kaarten tonen:
+
+| Keuze | Inhoud |
+| --- | --- |
+| Tips | Filmtips van TMDB (Voor jou): Explore, Films, Series |
+| Verder kijken | Wat je in de streaming-apps liet liggen |
+| Klok | Alleen klok, datum en weer |
+| AIO | De mediaserver (zie tabellen hieronder) |
+
+### Tabs bij AIO
+
+| Tab | Inhoud |
+| --- | --- |
+| Verder kijken | In progress / next-up uit Jellyfin |
+| Pas toegevoegd | Films en series die net in Jellyfin of Plex zijn gekomen |
+| Films | Je eigen filmbibliotheek; volgende pagina’s laden tijdens het bladeren |
+| Series | Je eigen series; volgende pagina’s laden tijdens het bladeren |
+| Trending | Aanbevelingen van deze week (via Seerr), met aanvragen voor ontbrekende titels |
+
+OK op een titel die nog niet in de bibliotheek staat, vraagt hem aan via Seerr. OK op een titel die er al is, opent Wholphin. Plaatjes voor Verder kijken en Pas toegevoegd gaan via de AIO-manager (https), niet rechtstreeks over http naar Jellyfin.
+
+**Verder kijken** wordt op het startscherm opnieuw opgehaald zonder de zes uur voor nieuwe aanbevelingen af te wachten.
+Dit werkt via de AIO-koppeling ook zonder een Jellyfin-sleutel op de tv. Bij **Bovenaan het scherm → Verder kijken**
+worden Wholphin-items uit Android gebruikt; als Wholphin daar nog niets aanbiedt, probeert TV Thuis dezelfde AIO-koppeling.
+Wholphin moet al aangemeld zijn en automatisch aanmelden toestaan om een titel via zijn koppeling te openen.
+
+**Verder kijken** bevat alleen begonnen films en volgende afleveringen; dit is niet je hele bibliotheek.
+Pas toegevoegd staat altijd op toevoegdatum: nieuwste eerst, zonder wisselende uurvolgorde of het verbergen van vervolgdelen.
+Films en Series laden per 20 titels door en gebruiken geen limiet van 25–40 aanbevelingen. Alleen afbeeldingen rond
+de geselecteerde tegel worden voorbereid. De AIO-nightly met de verbeterde afbeeldingsroute levert brede achtergronden
+van 1280 × 720 en posters van 780 × 1170, in plaats van een uitvergrote miniatuurposter.
+
+Trending gebruikt brede afbeeldingen als de manager die aanlevert. Levert een oudere AIO-versie alleen posters,
+dan zoekt TV Thuis de brede afbeelding via de bestaande TMDB-sleutel, wanneer die is ingesteld. Zonder brede
+artwork, bij een mislukte download of zonder TMDB-sleutel blijft de gewone poster zichtbaar.
+
+De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
+
+## Nieuwe bediening uit Free My TV
+
+Op Android en Google TV kun je **OK ingedrukt houden op een bovenste knop** om die met links/rechts te
+verplaatsen. OK bewaart de volgorde; Terug annuleert. De profielknop blijft rechts staan.
+Via **Shelf → Shelf order** kies je je eigen volgorde of **Last opened first**. Bij die laatste keuze komt
+de laatst vanuit TV Thuis geopende app vooraan en is handmatig verplaatsen van de app-plank uitgeschakeld;
+de bovenste knoppen blijven verplaatsbaar. Terugschakelen naar **My order** wist de lijst van geopende apps.
+Via **Top Buttons → App Store** kun je Google Play of de Amazon Appstore toevoegen, als die beschikbaar is.
+Op LG- en Samsung-tv's zonder antenne kun je **Startscherm → Live TV** uit de ingangenlijst halen.
+
+In de startscherminstellingen kun je de **Watchmode-sleutel** via een QR-code of met de afstandsbediening
+invoeren, en onder **Picks → Cartoons and anime** animatiefilms en anime aan- of uitzetten voor de TMDB-tips.
+**At power-on** kiest tussen de keuze van de tv, het startscherm of Live TV na volledig opstarten;
+ontwaken uit standby blijft zoals het was.
+
+Op LG kunnen TMDB-tips via **Open picks in → Nuvio** direct op hun titelpagina openen. AIO-titels blijven
+Wholphin gebruiken. De LG-installatie past de schermresolutie automatisch aan voor HD- en Full HD-tv's.
+
+Nieuwere upstream-aanpassingen ondersteunen de YouTube-knop van Chromecast met Google TV, app-knoppen op
+ondersteunde onn-afstandsbedieningen en de Input-knop op Hisense. Tv's met weinig geheugen gebruiken ook
+vanaf Android 13 de lichtere tekenpaden. Bij Samsung betekent `download failed[116]` meestal dat er te weinig
+vrije opslag voor apps is; de Python-installatietool toont de foutmelding van de tv zelf.
+
+## Profielen (Android en Google TV)
+
+De profielafbeelding rechtsboven opent de profielkeuze. Via **Profielen beheren** kun je profielen toevoegen,
+hernoemen, verwijderen en hun apps en afbeelding kiezen. Er zijn 31 ingebouwde afbeeldingen, inclusief een
+regenboog en zes ingetogen keuzes: twee portretten, maan, bergen, blad en ringen. De pijltjestoetsen bladeren door de afbeeldingen; de huidige keuze komt ook op het startscherm.
+De profielkeuze is ook bereikbaar via **Startscherm → Profielen**.
+
+Elk profiel heeft een eigen app-plank, app-zichtbaarheid, taal, thema, weer- en kaartinstellingen, inclusief de
+keuze voor Tips, Verder kijken, Klok of AIO. Een nieuw profiel begint met een kopie van het actieve profiel.
+De laatste keuze blijft bewaard na opnieuw starten. Bestaande profielen en instellingen blijven bij een update
+behouden; het laatste profiel kan niet worden verwijderd.
+
+Dit zijn startschermprofielen, geen ouderlijk toezicht. Accounts, kijkgeschiedenis en gegevens in streaming-apps
+blijven gedeeld. Ook AIO-/Jellyfin-aanmeldgegevens, TMDB-sleutel, foto's, afstandsbedieningsknoppen, slaaptimer en
+Android-rechten blijven van het hele apparaat. Apps verbergen blokkeert ze niet in Android of via casten.
+De nieuwe profielbediening is vertaald in Nederlands en Engels; de andere talen gebruiken hiervoor Engels.
+
+## Schermbeveiliging
+
+De schermbeveiliging toont posters (of bij AIO de trendingfoto’s) op een zwarte achtergrond, met klok en weer. Zwarte randen blijven uit; de klok is gedimd en schuift langzaam, zodat een OLED- of Mini-LED-paneel niet één helder vlak blijft branden.
+
+In **Startscherm → Schermbeveiliging**:
+
+| Rij | Betekenis |
+| --- | --- |
+| Schermbeveiliging | Aan of uit |
+| Start na | 5 min, 10 min, 15 min, 30 min, 1 uur of 2 uur |
+| Aanvraagknop | Welke knop een titel aanvraagt of opent (standaard OK) |
+| Foto-indeling | Schermvullend of Fotocollage |
+| Bron schermbeveiliging | Automatisch, AIO of Immich |
+| Bekijken | Direct de beveiliging tonen |
+
+Bij schermvullende eigen foto's blijven portretten, vierkante foto's en panorama's helemaal zichtbaar op zwart;
+brede foto's vullen het scherm met een rustige zoom. Fotocollage blijft een aparte keuze.
+
+**Bron schermbeveiliging** geldt per profiel. *AIO* toont alleen AIO-afbeeldingen; *Immich* toont alleen
+foto's uit de geselecteerde Immich-verzameling of het gekozen album, ook bij de collage. Een lege of onbereikbare
+gekozen bron toont de klok en haalt geen beelden uit een andere bron. *Automatisch* houdt de bestaande keuze:
+eigen foto's indien beschikbaar, anders AIO of de TMDB-tips. Het Immich-album kies je onder **Mijn foto's**.
+
+Tijdens de beveiliging: **links** / **rechts** voor de vorige of volgende foto; de gekozen aanvraagknop vraagt of opent. Andere knoppen sluiten de beveiliging. Volume blijft van de tv.
+
+**Fotocollage** toont maximaal drie eigen foto's tegelijk, met witte lijsten op een rustige achtergrond,
+zachte overgangen en klok en weer rechtsonder. Staande foto's blijven heel. De opnamedatum staat erbij als
+die beschikbaar is. Deze keuze gebruikt eigen foto's ook wanneer AIO is ingesteld; zonder eigen foto's blijft
+de bestaande schermbeveiliging werken. De indeling wordt per profiel bewaard; de fotocollectie is gedeeld.
+
+### Foto's uit Immich (Android en Google TV)
+
+De bestaande Immich-koppeling kan alle foto's of één album gebruiken:
+
+1. Zet `immich_server=https://photos.example.com` in je lokale, genegeerde `config.properties` en bouw de APK.
+   De app bewaart dit adres daarna op de tv; ook een latere standaard release blijft die server gebruiken.
+   Gebruik het basisadres van de server, zonder `/photos` of `/api`. HTTP kan alleen op het eigen netwerk.
+2. Maak in Immich onder **Account Settings → API Keys** een sleutel met `asset.read`, `asset.view`,
+   `asset.download` en `album.read`. Houd die privé; hij komt nooit in de APK of repository.
+3. Stuur de sleutel vanuit je eigen terminal met `python3 tools/send_key.py <TV-IP> immich_api_key`.
+   Het script vraagt hem verborgen en controleert de verbinding.
+4. Kies **Startscherm → Mijn foto's** voor alle Immich-foto's of een album, en
+   **Schermbeveiliging → Foto-indeling → Fotocollage** voor de collage.
+
+De tv bewaart verkleinde kopieën en haalt iedere zes uur nieuwe foto's op. De laatst opgehaalde foto's
+blijven zonder verbinding beschikbaar. Alleen de opnamedatum blijft in de kopieën; GPS-gegevens worden verwijderd.
+Na een albumwissel verdwijnen foto's uit de vorige selectie meteen uit beeld. Elke selectie heeft een eigen cache;
+een leeg of onbereikbaar album toont geen foto's uit andere albums. Handmatig gestuurde foto's blijven bewaard,
+maar verschijnen niet zolang een specifiek Immich-album is gekozen.
+De albumkeuze geldt ook bij schermvullende weergave en krijgt voorrang op AIO-afbeeldingen. Zolang het album nog
+geen beschikbare foto's heeft, verschijnt de klok in plaats van andere foto's of filmbeelden.
+Bestaande, eerder bijgesneden kopieën krijgen hun volledige verhouding wanneer ze opnieuw uit Immich zijn opgehaald.
+Foto's kunnen ook handmatig worden gestuurd met `python3 tools/photos.py <TV-IP> <foto-of-map>`.
+
+## Updates op de Android-tv’s
+
+Nieuwe APK’s komen uit de releases van deze repo (`FreeMyTV.apk`), ondertekend met dezelfde sleutel als op de tv’s.
+
+1. **Startscherm → Updates**
+2. **OK** als er een nieuwere versie staat
+3. Android vraagt of de update geïnstalleerd mag worden
+
+Er is ook een wekelijkse check. De LG (webOS) krijgt deze APK niet.
+
+## Instellingen op de tv
+
+Home Settings → **AIO Media**:
+
+Met een AIO-versie die tv-koppelingen ondersteunt, hoef je onderstaande velden niet handmatig in te vullen:
+
+1. Kies **Koppelen met AIO** en scan de QR-code met een telefoon op hetzelfde netwerk.
+2. Open je AIO-dashboard op de telefoon: **Instellingen → Account → Tv-koppelingen → Koppellink maken**.
+3. Kopieer die link en plak hem op de telefoonpagina van de tv. Het AIO-adres komt automatisch mee.
+
+De link werkt één keer, gedurende vijf minuten. De tv bewaart alleen een eigen, intrekbare AIO-koppeling.
+Jellyfin-adres, Jellyfin API-sleutel en AIO-beheerderswachtwoord blijven op de server; ook Verder kijken gaat via AIO.
+Na het koppelen verdwijnen de handmatige invoervelden. Met **AIO ontkoppelen** of in het AIO-dashboard kun je
+één tv intrekken. Andere tv's blijven verbonden. Oudere AIO-versies ondersteunen nog de handmatige velden:
+
+| Veld | Voorbeeld |
+| --- | --- |
+| AIO-server | het https-adres van jullie manager (of http op het thuisnetwerk) |
+| Gebruikersnaam | de beheerder van de manager |
+| Wachtwoord | hetzelfde wachtwoord |
+| Jellyfin-server | het adres van Jellyfin op het thuisnetwerk (voor Verder kijken) |
+| Jellyfin API-sleutel | uit Jellyfin → Dashboard → API-sleutels |
+| Zoeken en aanvragen | een titel die niet in de trendinglijst staat |
+| Verbinding testen | moet trending- en recent-aantallen tonen |
+
+De tv praat met `POST /api/auth/login` en daarna met `Authorization: Bearer` naar `/api/homepage`, `/api/homepage/search`, `/api/homepage/request` en `/api/homepage/art`. Het wachtwoord blijft op die tv staan.
+
+Stad en eenheid zet je in dezelfde Home Settings (weer en zonsondergang). Wholphin of een andere Jellyfin-client moet op de tv staan om een titel te openen.
+
+`config.properties` kan adres, stad en regio alvast meegeven bij het bouwen. Wachtwoorden en API-sleutels horen daar niet in (behalve wat je bewust inbouwt voor huisbuilds). `config.properties` staat niet in git. Na een update blijven waarden die al op de tv stonden behouden; een schone installatie begint opnieuw.
+
+## Bouwen
+
+Android / Google TV / Fire OS, op een Mac:
+
+```bash
+brew install --cask temurin android-commandlinetools android-platform-tools
+sdkmanager "build-tools;34.0.0" "platforms;android-34"
+./build.sh
+```
+
+De eerste run maakt `config.properties`. Daarna nog een keer `./build.sh`. Het resultaat is `FreeMyTV.apk`.
+
+LG webOS (Python 3):
+
+```bash
+python3 webos/build.py
+```
+
+Dat maakt `FreeMyTV-webos.ipk`.
+
+## Handleiding per toestel
+
+| Toestel | Systeem | Handleiding |
+| --- | --- | --- |
+| TCL 65C75B (2024) | Google TV, Android 12 | [docs/tvs/tcl-65c75b.md](docs/tvs/tcl-65c75b.md) |
+| TCL 58P635 (2023) | Google TV, Android 11 | [docs/tvs/tcl-58p635.md](docs/tvs/tcl-58p635.md) |
+| LG 43UP77006LB | webOS 6.0 | [docs/tvs/lg-43up77006lb.md](docs/tvs/lg-43up77006lb.md) |
+| Philips 58PUS7304 | Android TV 9 | [docs/tvs/philips-58pus7304.md](docs/tvs/philips-58pus7304.md) |
+| Google TV Streamer | Google TV, Android 14 | [docs/tvs/google-tv-streamer.md](docs/tvs/google-tv-streamer.md) |
+| Fire TV 4K | Fire OS, of Vega OS | [docs/tvs/fire-tv-4k.md](docs/tvs/fire-tv-4k.md) |
+
+Terug naar het fabrieksscherm, op Android en Google TV: de app openen → Home Screen → Original.
+
+Op TCL na elke nieuwe installatie (ook na Updates, als je opnieuw via adb zet):
+
+```bash
+adb shell "appops set io.freemytv APP_AUTO_START allow"
+```
+
+## Herkomst
+
+De launcher, het tekenen en de installatie per platform komen uit Free My TV van simbasjungles. Die code blijft MIT; zie [LICENSE](LICENSE). TV Thuis voegt de mediamanager, de aanvragen, AIO bovenaan het scherm, de schermbeveiligingsopties en de updates van deze fork toe.

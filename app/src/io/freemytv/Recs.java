@@ -222,15 +222,17 @@ final class Recs {
     private volatile String listLanguage = "";   // language used for the saved titles, genres and texts
     private volatile String traktActivity = "";  // Trakt's last change when the picks were fetched
     private volatile long traktCheckedAt;
-    private final Map<String, Library> libraries = new HashMap<>();
-    private String libraryIdentity = "";
-
-    private static final class Library {
-        List<Pick> items = new ArrayList<>();
-        int page;
-        boolean loading, end;
-        long failedAt;
-    }
+    private final AioRecommendations aioRecommendations = new AioRecommendations(new AioRecommendations.Host() {
+        public boolean configured() { return Aio.configured(); }
+        public String identity() { return Aio.identity(); }
+        public long now() { return System.currentTimeMillis(); }
+        public void execute(Runnable task) { io.execute(task); }
+        public boolean fill(String kind, int page, List<Pick> out) throws IOException {
+            return Aio.fillLibrary(kind, page, out);
+        }
+        public void changed() { notifyListeners(); }
+        public void failed(IOException e) { AppLog.w("library: " + e.getMessage()); }
+    });
 
     private Recs(Context c) {
         context = c;
@@ -383,82 +385,14 @@ final class Recs {
     /** Selected home tab: hourly recommendations, or paged owned movies/shows in AIO mode. */
     List<Pick> now(String kind) {
         if (Aio.configured() && Prefs.TOP_AIO.equals(Prefs.topContent())) {
-            if ("movie".equals(kind) || "tv".equals(kind)) return libraryNow(kind);
+            if ("movie".equals(kind) || "tv".equals(kind)) return aioRecommendations.libraryNow(kind);
             return aioNow(kind);
         }
         return tipsNow(kind);
     }
 
-    /** Called only under the libraries lock. Credentials changing cannot expose the previous server's pages. */
-    private Library library(String kind) {
-        String identity = Aio.identity();
-        if (!identity.equals(libraryIdentity)) {
-            libraries.clear();
-            libraryIdentity = identity;
-        }
-        Library state = libraries.get(kind);
-        if (state == null) {
-            state = new Library();
-            libraries.put(kind, state);
-        }
-        return state;
-    }
-
-    private List<Pick> libraryNow(String kind) {
-        List<Pick> items;
-        boolean first;
-        synchronized (libraries) {
-            Library state = library(kind);
-            items = state.items;
-            first = state.page == 0;
-        }
-        if (first) moreLibrary(kind);
-        return items;
-    }
-
-    /** Fetch another page near the focused card, never the entire library's artwork at once. */
-    void moreLibrary(String kind) {
-        if (!Aio.configured() || !("movie".equals(kind) || "tv".equals(kind))) return;
-        final Library state;
-        final String identity;
-        final int page;
-        synchronized (libraries) {
-            state = library(kind);
-            long sinceFail = System.currentTimeMillis() - state.failedAt;
-            if (state.loading || state.end || (state.failedAt != 0 && sinceFail >= 0 && sinceFail < 30_000)) return;
-            state.loading = true;
-            page = state.page + 1;
-            identity = libraryIdentity;
-        }
-        io.execute(() -> {
-            try {
-                List<Pick> next = new ArrayList<>();
-                boolean more = Aio.fillLibrary(kind, page, next);
-                synchronized (libraries) {
-                    if (libraries.get(kind) != state || !identity.equals(Aio.identity())) return;
-                    state.items = libraryItems(page == 1 ? new ArrayList<>() : state.items, next, kind);
-                    state.page = page;
-                    state.end = !more;
-                    state.failedAt = 0;
-                }
-            } catch (IOException e) {
-                synchronized (libraries) { state.failedAt = System.currentTimeMillis(); }
-                AppLog.w("library: " + e.getMessage());
-            } finally {
-                synchronized (libraries) { state.loading = false; }
-                notifyListeners();
-            }
-        });
-    }
-
-    /** Owned movies/shows keep their order and individual IDs, including sequels in the same franchise. */
-    static List<Pick> libraryItems(List<Pick> previous, List<Pick> next, String kind) {
-        Map<String, Pick> unique = new LinkedHashMap<>();
-        for (List<Pick> page : Arrays.asList(previous, next)) {
-            for (Pick p : page) if (p.aio && p.recent && !p.resume && kind.equals(p.kind)) unique.putIfAbsent(key(p), p);
-        }
-        return new ArrayList<>(unique.values());
-    }
+    /** Fork-owned page state; the home screen asks only when focus approaches the next page. */
+    void moreLibrary(String kind) { aioRecommendations.moreLibrary(kind); }
 
     /** Tips: TMDB (and Trakt), never the media manager's titles. */
     private List<Pick> tipsNow(String kind) {
@@ -502,34 +436,8 @@ final class Recs {
         }
     }
 
-    /**
-     * Media manager tabs: "resume" keeps Jellyfin's order (what you were watching), "recent" is newly added,
-     * "movie" and "tv" are this week's trending. null is recently added.
-     */
     private List<Pick> aioNow(String kind) {
-        boolean resume = "resume".equals(kind);
-        List<Pick> list = new ArrayList<>();
-        for (Pick p : picks) {
-            if (!p.aio) continue;
-            if (resume) { if (p.resume) list.add(p); }
-            else if ("recent".equals(kind) || kind == null) { if (p.recent && !p.resume) list.add(p); }
-            else if (!p.recent && !p.resume && ("trending".equals(kind) || kind.equals(p.kind))) list.add(p);
-        }
-        int cards = Prefs.cards();
-        if (!resume && (kind == null || "recent".equals(kind))) {
-            list = MediaOrder.newest(list, p -> p.addedAt);
-            return new ArrayList<>(list.subList(0, Math.min(cards, list.size())));
-        }
-        if (resume) return list.size() > cards ? new ArrayList<>(list.subList(0, cards)) : list;
-        List<Pick> out = new ArrayList<>();
-        if (list.isEmpty()) return out;
-        java.util.Set<String> seen = new java.util.HashSet<>();
-        long hour = System.currentTimeMillis() / 3600_000L;
-        for (int i = 0; i < list.size() && out.size() < cards; i++) {
-            Pick p = list.get((int) ((hour * cards + i) % list.size()));
-            if (seen.add(franchise(p.title))) out.add(p);
-        }
-        return out;
+        return AioRecommendations.now(picks, kind, Prefs.cards(), System.currentTimeMillis() / 3600_000L);
     }
 
     /** "Law & Order: Special Victims Unit" → "law & order" (what comes before ":" or " - "). */
@@ -778,14 +686,7 @@ final class Recs {
         return out;
     }
 
-    List<Pick> aioShowcase() {
-        List<Pick> out = new ArrayList<>();
-        java.util.Set<String> seen = new java.util.HashSet<>();
-        for (Pick p : picks) {
-            if (p.aio && !p.resume && hasImage(p) && seen.add(key(p))) out.add(p);
-        }
-        return out;
-    }
+    List<Pick> aioShowcase() { return AioRecommendations.showcase(picks, this::hasImage); }
 
     /** The pick's original image if it's already on disk (the screensaver loads it in its own way), or null. */
     File readyImage(Pick p) {
@@ -895,7 +796,7 @@ final class Recs {
         list.addAll(aio);
         list.addAll(tips);
         picks = list;
-        synchronized (libraries) { libraries.clear(); }
+        aioRecommendations.clear();
         period = p;
         listAt = System.currentTimeMillis();
         listLanguage = Ui.language;

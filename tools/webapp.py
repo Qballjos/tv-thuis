@@ -90,7 +90,7 @@ def coins():
 def catalogues():
     """Each language's catalogue (app/assets/i18n), with only the keys the web app uses: {lang: {key: text}}."""
     keys = translate.web_keys()
-    return {lang: {k: v for k, v in sorted(translate.load(lang).items()) if k in keys} for lang in translate.languages()}
+    return {lang: {k: v for k, v in sorted(translate.load(lang).items()) if k in keys} for lang in ["en"] + translate.languages()}
 
 
 def files(config, made_by):

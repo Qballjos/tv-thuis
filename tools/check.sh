@@ -26,6 +26,7 @@ if [ "$what" = all ] || [ "$what" = android ]; then
   bash tools/check-key-pages.sh
   bash tools/check-aio-pairing.sh
   bash tools/check-aio-library.sh
+  bash tools/check-fork-media.sh
   bash tools/test-order.sh
   bash tools/check-recs-services.sh
   bash tools/check-media-order.sh
@@ -33,6 +34,9 @@ fi
 
 if [ "$what" = all ] || [ "$what" = web ]; then
   python3 tools/test-release-version.py
+  python3 tests/test_fork_package.py
+  python3 tests/test_translation_overlays.py
+  python3 tests/test_upstream_sync.py
   python3 tools/translate.py --check
   node tools/test-aio-library.js
   node tools/test-artwork.js

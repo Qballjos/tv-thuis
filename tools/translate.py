@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Translation catalogues for the Android app and the LG/Samsung web app (app/assets/i18n/<lang>.json).
+"""Translation catalogues for Android and web: upstream i18n plus fork-i18n overlays.
+
+app/assets/i18n is upstream-owned. Writes, fill and prune only update fork-i18n.
+Runtime uses English fallback, then upstream and fork locale translations. Missing
+fork translations in newly added upstream languages intentionally fall back to English.
 
     python3 tools/translate.py                 # extract en.json from the code, report what each language lacks
     python3 tools/translate.py --fill          # also translate the missing strings (needs ANTHROPIC_API_KEY)
@@ -37,6 +41,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "app", "src")
 WEB = os.path.join(ROOT, "web")
 I18N = os.path.join(ROOT, "app", "assets", "i18n")
+FORK_I18N = os.path.join(ROOT, "app", "assets", "fork-i18n")
 CACHE = os.path.join(ROOT, "tools", ".i18n-cache.json")   # translations made with --fill, by hash (not committed)
 DEFAULT_MODEL = "claude-haiku-5-5"
 HAND = {"pt", "es", "de", "ru", "th", "tr"}   # hand translations: --fill leaves them to a person unless --lang names one
@@ -172,20 +177,40 @@ def extract():
 
 # MARK: - Catalogues
 
+def read_catalogue(directory, lang):
+    path = os.path.join(directory, lang + ".json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError("catalogue must be a JSON object: " + path)
+    return data
+
+
 def load(lang):
-    with open(os.path.join(I18N, lang + ".json"), encoding="utf-8") as f:
-        return json.load(f)
+    """English fallback, upstream translation, then fork translation."""
+    data = read_catalogue(I18N, "en")
+    data.update(read_catalogue(FORK_I18N, "en"))
+    if lang != "en":
+        data.update(read_catalogue(I18N, lang))
+        data.update(read_catalogue(FORK_I18N, lang))
+    return data
 
 
 def save(lang, data):
-    # LF on every system: written in text mode on Windows, every line would change (\r\n).
-    with open(os.path.join(I18N, lang + ".json"), "w", encoding="utf-8", newline="\n") as f:
-        json.dump(dict(sorted(data.items())), f, ensure_ascii=False, indent=1)
+    """Write only the fork delta; never rewrite or prune upstream catalogues."""
+    base = read_catalogue(I18N, lang)
+    delta = {k: v for k, v in data.items() if k not in base or base[k] != v}
+    os.makedirs(FORK_I18N, exist_ok=True)
+    with open(os.path.join(FORK_I18N, lang + ".json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump(dict(sorted(delta.items())), f, ensure_ascii=False, indent=1)
         f.write("\n")
 
 
 def languages():
-    return sorted(n[:-5] for n in os.listdir(I18N) if n.endswith(".json") and n != "en.json")
+    return sorted({n[:-5] for directory in (I18N, FORK_I18N) if os.path.isdir(directory)
+                   for n in os.listdir(directory) if n.endswith(".json") and n != "en.json"})
 
 
 def digest(text):
@@ -247,10 +272,14 @@ def check(en):
         if not isinstance(cat, dict):
             errors.append(f"{lang}: catalogue must be a JSON object")
             continue
-        with open(os.path.join(I18N, lang + ".json"), "rb") as f:
-            if b"\r" in f.read():
-                errors.append(f"{lang}: CRLF line endings (the catalogues use LF: python3 tools/translate.py writes them so)")
-        missing, obsolete, _ = problems(en, cat)
+        for directory in (I18N, FORK_I18N):
+            path = os.path.join(directory, lang + ".json")
+            if os.path.exists(path):
+                with open(path, "rb") as f:
+                    if b"\r" in f.read():
+                        errors.append(f"{lang}: CRLF line endings: {path}")
+        missing, _, _ = problems(en, cat)
+        obsolete = [k for k in read_catalogue(FORK_I18N, lang) if k not in en]
         for label, keys in (("missing key", missing), ("obsolete key", obsolete)):
             for key in keys:
                 errors.append(f"{lang}: {label}: {key!r}")
@@ -333,7 +362,7 @@ def main():
         return check(en)
     os.makedirs(I18N, exist_ok=True)
     save("en", en)
-    if a.new and not os.path.exists(os.path.join(I18N, a.new + ".json")):
+    if a.new and a.new not in languages():
         save(a.new, {})
     cache = json.load(open(CACHE, encoding="utf-8")) if os.path.exists(CACHE) else {}
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
@@ -342,7 +371,8 @@ def main():
     print(f"en.json: {len(en)} strings")
     incomplete = 0
     for lang in a.lang or languages():
-        cat = load(lang)
+        cat = read_catalogue(I18N, lang)
+        cat.update(read_catalogue(FORK_I18N, lang))
         missing, obsolete, broken = problems(en, cat)
         todo = sorted(set(missing) | set(broken))
         if a.fill and key and todo and lang in HAND and not a.lang:
@@ -363,8 +393,12 @@ def main():
                         known[digest(k)] = text
             print(f"{lang}: {len(todo) - len(ask)} from the cache, {len(ask)} sent to {a.model}")
         if a.prune:
+            base = read_catalogue(I18N, lang)
             for k in obsolete:
-                cat.pop(k)
+                if k in base:
+                    cat[k] = base[k]
+                else:
+                    cat.pop(k)
         save(lang, cat)
         missing, obsolete, broken = problems(en, cat)
         status = "complete" if not (missing or broken) else "INCOMPLETE"

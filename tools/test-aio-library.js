@@ -2,7 +2,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-const source = fs.readFileSync('web/data.js', 'utf8');
+const scripts = Array.from(fs.readFileSync('web/index.html', 'utf8').matchAll(/<script src="([^"]+)"><\/script>/g), match => match[1]);
+assert(scripts.indexOf('fork-aio.js') < scripts.indexOf('data.js') && scripts.includes('fork-aio.js'), 'Load the isolated AIO module before its integration');
+const source = scripts.filter(path => path === 'fork-aio.js' || path === 'data.js')
+  .map(path => fs.readFileSync('web/' + path, 'utf8')).join('\n');
 const uuid = n => '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
 const row = n => ({id: uuid(n), title: 'Franchise: Part ' + n, mediaType: 'movie', poster: '/poster'});
 
@@ -78,3 +81,73 @@ dates.reply([
   {...row(203), when: '2023-11-14T23:13:20+01:00'}
 ]);
 assert.deepEqual(Array.from(dates.context.Data.picks('movie'), p => p.addedAt), [1700000000000, 1700000000000, 1700000000000]);
+
+// Exercise the fork module without data.js, its storage globals, or the UI.
+const directPending = [];
+class DirectRequest {
+  constructor() { this.headers = {}; }
+  open(method, url) { this.method = method; this.url = url; }
+  setRequestHeader(name, value) { this.headers[name] = value; }
+  send(body) { this.body = body; directPending.push(this); }
+}
+const isolated = vm.createContext({XMLHttpRequest: DirectRequest});
+vm.runInContext(fs.readFileSync('web/fork-aio.js', 'utf8'), isolated);
+let session = '', directPicks = [];
+const direct = isolated.ForkAio.create({
+  prefs: {aioUrl: () => 'https://manager.invalid', aioUser: () => 'viewer', aioPassword: () => 'fixture',
+    aioToken: () => session, set: (key, value) => { assert.equal(key, 'aioToken'); session = value; },
+    cards: () => 20, topContent: () => 'aio'},
+  translate: text => text, changed: () => {}, keyOf: p => p.kind + ':' + (p.itemId || p.id),
+  sliceHour: list => list, jellyfinImage: () => '', fetchResume: done => done([]),
+  picks: () => directPicks, setPicks: rows => { directPicks = rows; }
+});
+let authCalls = 0;
+direct.ensureAio(error => { assert.equal(error, null); authCalls++; });
+const login = directPending.shift();
+assert.equal(login.method, 'POST');
+assert.equal(login.url, 'https://manager.invalid/api/auth/login');
+assert.equal(login.headers.Authorization, undefined, 'Login must not carry an old bearer token');
+assert.deepEqual(JSON.parse(login.body), {username: 'viewer', password: 'fixture'});
+login.status = 200; login.readyState = 4; login.responseText = '{"access_token":"session-fixture"}';
+login.onreadystatechange(); login.onerror();
+assert.equal(authCalls, 1, 'A late network event cannot complete login twice');
+assert.equal(session, 'session-fixture');
+direct.ensureAio(error => { assert.equal(error, null); authCalls++; });
+assert.equal(directPending.length, 0, 'An existing session avoids another login');
+let refused = 0;
+direct.aioCall('GET', '/api/homepage', null, error => { assert.match(error.message, /refused the login/); refused++; });
+const request = directPending.shift();
+assert.equal(request.headers.Authorization, 'Bearer session-fixture');
+assert.equal(request.timeout, 15000);
+request.status = 401; request.readyState = 4; request.responseText = '{}';
+request.onreadystatechange(); request.ontimeout();
+assert.equal(session, '', 'Rejected authentication clears the stored token');
+assert.equal(refused, 1);
+const converted = direct.aioPick({id: uuid(303), title: 'Library', mediaType: 'Series'}, true);
+assert.equal(converted.itemId, uuid(303));
+assert.equal(converted.kind, 'tv');
+assert.match(converted.poster, /^https:\/\/manager.invalid\/api\/homepage\/art\?.*image=Primary/);
+assert.match(converted.backdrop, /image=Backdrop&fillWidth=1280&fillHeight=720/);
+assert.equal(direct.sizedImage('/api/homepage/art?item_id=test&image=Primary&fillWidth=1', '', true),
+  'https://manager.invalid/api/homepage/art?item_id=test&image=Backdrop&fillWidth=1280&fillHeight=720');
+console.log('Standalone AIO: login/session headers, single completion, rejected-token clearing, stable UUIDs and artwork sizing passed.');
+session = 'session-fixture';
+let requested = false;
+direct.requestTitle('tv', 456, error => { assert.equal(error, null); requested = true; });
+const titleRequest = directPending.shift();
+assert.equal(titleRequest.url, 'https://manager.invalid/api/homepage/request');
+assert.deepEqual(JSON.parse(titleRequest.body), {mediaType: 'tv', mediaId: 456, seasons: 'all'});
+titleRequest.status = 200; titleRequest.readyState = 4; titleRequest.responseText = '{"ok":true}';
+titleRequest.onreadystatechange();
+assert(requested);
+let searchRows;
+direct.searchTitles('a & b', (error, rows) => { assert.equal(error, null); searchRows = rows; });
+const search = directPending.shift();
+assert.match(search.url, /q=a%20%26%20b$/);
+search.status = 200; search.readyState = 4;
+search.responseText = JSON.stringify({results: Array.from({length: 15}, (_, n) => ({id: n + 1001, title: 'Result ' + n, can_request: true}))});
+search.onreadystatechange();
+assert.equal(searchRows.length, 12);
+assert.equal(searchRows[0].app, 'request');
+assert.equal(searchRows[0].recent, false);
+console.log('Standalone AIO: TV requests preserve all-season body and searches encode queries and cap results.');

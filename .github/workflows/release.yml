@@ -48,7 +48,7 @@ jobs:
             echo "This commit is already released."
           else
             tag=$(printf '%s' "$latest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tagName"])')
-            name=$(python3 tools/release-version.py app/AndroidManifest.xml "$tag")
+            name=$(python3 tools/release-version.py fork/package.json "$tag")
             echo "name=$name" >> "$GITHUB_OUTPUT"
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
@@ -68,8 +68,9 @@ jobs:
           printf '%s' "$FREEMYTV_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/keys/freemytv.keystore"
           export FREEMYTV_KEYSTORE="$RUNNER_TEMP/keys/freemytv.keystore"
           ./build.sh --generic
+          expected_cert=$(python3 -c 'import json; print(json.load(open("fork/package.json"))["certificate"])')
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs FreeMyTV.apk \
-            | grep -q 94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138
+            | grep -Fq "$expected_cert"
       - name: Publish
         if: steps.version.outputs.exists == 'false'
         env:

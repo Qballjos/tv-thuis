@@ -1,10 +1,10 @@
 {
   "id": "io.freemytv",
-  "version": "1.3.10",
-  "vendor": "TV Thuis",
+  "version": "1.4.0",
+  "vendor": "Free My TV",
   "type": "web",
   "main": "index.html",
-  "title": "TV Thuis",
+  "title": "Free My TV",
   "icon": "icon.png",
   "largeIcon": "largeIcon.png",
   "iconColor": "#FF7A9E",
