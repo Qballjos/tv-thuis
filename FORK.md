@@ -6,6 +6,20 @@ Dit is **niet** het officiële Free My TV-project. TV Thuis is een huis-fork. He
 
 Wat er per versie is gedaan: [docs/changelog.md](docs/changelog.md). Site: [qballjos.github.io/tv-thuis](https://qballjos.github.io/tv-thuis/).
 
+## Onderhoud en documentatie
+
+Dit bestand beschrijft de huis-fork. `README.md` en `CLAUDE.md` volgen het upstream-project, zodat nieuwe
+versies minder vaak conflicteren. Voor ontwikkelaars: [PROJECT_SETUP.md](PROJECT_SETUP.md),
+[fork/DEVELOPMENT.md](fork/DEVELOPMENT.md) en [fork/UPSTREAM.md](fork/UPSTREAM.md).
+
+AIO en de eigen screensaver gebruiken aparte modules en vertaalbestanden. Upstream-updates worden op een
+kandidaatbranch gecontroleerd voordat main verandert. Een conflict of mislukte controle verandert de bestaande
+release niet. Dit vermindert conflicten; grote upstream-wijzigingen kunnen nog handmatige integratie vragen.
+
+De glazen klok vervangt de AIO-kop en volgt de regio van de tv. Een eigen keuze voor 12 of 24 uur heeft voorrang.
+Android-updates komen van de ondertekende `FreeMyTV.apk` in de releases van deze fork. LG- en Samsung-builds
+worden apart gemaakt; de Homebrew- en TizenBrew-instructies voor upstream leveren niet automatisch deze fork.
+
 ## AIO Media Server Manager
 
 TV Thuis gebruikt de functies van [AIO Media Server Manager](https://github.com/Qballjos/aio-media-server-manager) op het startscherm:

@@ -4,6 +4,14 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+## 1.3.15
+
+- Profielmenu hersteld: de Android-manifestoverlay voegt het profielscherm nu toe aan het bestaande
+  application-blok, ook als dat blok de App-klasse benoemt. Een tweede blok kon het scherm onzichtbaar
+  maken voor Android en veroorzaakte een crash bij het profielicoon.
+- Regressietests controleren het echte manifest, precies één application-blok en de registratie van het
+  profielscherm. De ontwikkel- en onderhoudsdocumentatie is bijgewerkt.
+
 ## 1.3.14
 
 - GitHub-workflows worden nu ook gecontroleerd met actionlint, zowel bij gewone checks als voor een

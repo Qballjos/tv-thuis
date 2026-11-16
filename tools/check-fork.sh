@@ -4,6 +4,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 case "${1:-all}" in
   all|android)
+    sdk_path="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Library/Android/sdk}}"
+    build_tools="$(ls "$sdk_path/build-tools" | sort -V | tail -1)"
+    python3 tools/check-packaged-manifest.py FreeMyTV.apk "$sdk_path/build-tools/$build_tools/aapt"
     bash tools/test-recent.sh
     bash tools/check-profiles.sh
     bash tools/check-watch-next.sh

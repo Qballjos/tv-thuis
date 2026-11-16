@@ -37,7 +37,11 @@ def merge_nodes(target, overlay):
     target.attrib.update(overlay.attrib)
     for child in overlay:
         key = child.get(ANDROID + 'name')
-        match = next((node for node in target if node.tag == child.tag and node.get(ANDROID + 'name') == key), None)
+        # Containers are singletons even when the base application names its App class
+        # and the overlay only adds components. A second application is ignored by Android.
+        singleton = target.tag == 'manifest' and child.tag in ('application', 'queries', 'uses-sdk')
+        match = next((node for node in target if node.tag == child.tag
+                      and (singleton or node.get(ANDROID + 'name') == key)), None)
         if match is None:
             target.append(copy.deepcopy(child))
         else:
@@ -50,7 +54,11 @@ def android_manifest(root=ROOT, info=None):
     manifest = ET.fromstring((root / 'app/AndroidManifest.xml').read_bytes())
     if manifest.get('package') != 'io.freemytv':
         raise ValueError('Upstream Android package changed: review installed-app compatibility')
+    if len(manifest.findall('application')) != 1:
+        raise ValueError('Expected exactly one Android application block')
     merge_nodes(manifest, ET.fromstring((root / 'fork/android-manifest.xml').read_bytes()))
+    if len(manifest.findall('application')) != 1:
+        raise ValueError('Manifest overlay must preserve exactly one Android application block')
     manifest.set(ANDROID+'versionName', info['version'])
     manifest.set(ANDROID+'versionCode', str(version_code(info['version'])))
     for node in manifest.iter():

@@ -2,7 +2,8 @@
 
 ## Scope and authorization
 
-Use this guide for development and maintenance of Qballjos/tv-thuis. Read fork/DEVELOPMENT.md for household-specific rules, then CLAUDE.md for upstream architecture,
+Use this guide for development and maintenance of Qballjos/tv-thuis. Read
+[fork/DEVELOPMENT.md](fork/DEVELOPMENT.md) for household-specific rules, then CLAUDE.md for upstream architecture,
 compatibility requirements, security rules, and TV-specific behavior. Its installation walkthroughs apply
 when installing or operating a TV, not when managing this repository.
 
@@ -32,8 +33,8 @@ equivalent repository workflow. Select skills for the actual task; do not invoke
 
 Project skill preferences also include **Ponytail Full** and **Caveman Lite**. Discover their installed
 skill names and read their SKILL.md files before using them; follow their documented scope and triggers.
-These two skills were not available in the session that added this guidance, so their exact identifiers
-and behavior still need verification. Do not invent instructions for them or claim they are installed.
+Availability depends on the current environment. If either is unavailable, report that once and continue
+with the applicable available skills; do not invent instructions or claim it is installed.
 
 | Task | Skills |
 | --- | --- |
@@ -97,8 +98,12 @@ since GITHUB_TOKEN pushes do not trigger push workflows; its successful main run
 
 ## Maintaining the upstream boundary
 
-Keep household logic in AioRecommendations, SaverSources, web/fork-aio.js and other dedicated feature files.
+Keep household logic in AioRecommendations, AioSettings, SaverSources, web/fork-aio.js and other dedicated
+feature files.
 Preserve narrow hooks in upstream screens. Keep household translations in app/assets/fork-i18n, never in the
 upstream catalogues. tools/translate.py merges both layers and writes only overlays. Household checks belong
 in tools/check-fork.sh, called after the upstream checklist. Keep upstream README.md, CLAUDE.md, manifests and
 package templates unmodified; household guidance and staging overlays live in FORK.md and fork/.
+
+See [fork/UPSTREAM.md](fork/UPSTREAM.md) for the module map, translation merge order, candidate publication
+guards, conflict-artifact recovery, workflow validation and release verification.

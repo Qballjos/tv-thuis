@@ -1,6 +1,8 @@
 # TV Thuis: fork development rules
 
-Read this after PROJECT_SETUP.md and before the upstream CLAUDE.md. These household-specific rules take precedence for this fork. See FORK.md for user documentation.
+Read this after [PROJECT_SETUP.md](../PROJECT_SETUP.md) and before the upstream
+[CLAUDE.md](../CLAUDE.md). These household-specific rules take precedence for this fork.
+See [FORK.md](../FORK.md) for user documentation.
 
 ## Release identity and packaging
 
@@ -29,7 +31,6 @@ A local development APK is not a signed release and must never replace the publi
   `AioHttp` keeps HTTPS certificate checks and disables credential redirects. Runtime plain HTTP is pinned to private
   IPv4 addresses at the socket boundary; never relax global `network_security_config` for arbitrary hosts.
 
-
 - `ImmichPhotos` (with `immich_server` and the key sent to that TV; without the key My Photos is unchanged): every 6
   hours, on the home screen's resume or while the screensaver is showing, a random choice from the server (`POST /api/search/random`, or one album,
   `Prefs.photoSource`) is downloaded one photo at a time into `Photos.privateInbox` and imported right away, so at most
@@ -48,7 +49,8 @@ A local development APK is not a signed release and must never replace the publi
 
 ## Modules and translations
 
-AioRecommendations and SaverSources own fork recommendation and screensaver policies. web/fork-aio.js
+AioRecommendations owns paging and media selection; AioSettings owns AIO settings/dialog actions;
+SaverSources owns screensaver source and launch policy. web/fork-aio.js
 owns the equivalent web media behavior. Preserve the narrow hooks in shared core files; add new feature
 logic to these modules rather than expanding upstream screens.
 
@@ -64,3 +66,16 @@ stay shared, while shelf/content/photo selections stay per profile. Queued work 
 Prepare a candidate branch, run the complete checks, and only then advance main if its head has not moved.
 Conflicts and failed checks must leave main and releases unchanged. Use the conflict artifact to resolve an
 actual behavior collision; never blanket-select a side, force-push main, or mark an untested merge successful.
+
+The operational guide is [UPSTREAM.md](UPSTREAM.md). It covers exact module boundaries, overlay behavior,
+safe candidate publication, conflict artifacts, and release verification. Run the complete `tools/check.sh`;
+GitHub Check additionally validates workflows with actionlint before a commit can be released.
+
+## Android manifest overlay invariant
+
+The staged manifest must contain exactly one application element. Match singleton manifest containers by
+role, not by android:name: upstream's application names .App, while a household overlay may omit that
+attribute. ProfileManagerActivity must be a direct child of the existing application. A successful aapt
+build alone does not prove Android will register a component from a malformed multi-application manifest.
+Keep the real-manifest regression in tests/test_fork_package.py and inspect the packaged manifest when
+changing staging or component registration.

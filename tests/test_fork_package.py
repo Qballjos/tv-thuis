@@ -19,12 +19,14 @@ class ForkPackageTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = pathlib.Path(folder)
             (root / 'app').mkdir(); (root / 'fork').mkdir()
-            source = '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.freemytv" android:versionName="9.0" android:versionCode="9"><application android:label="Free My TV"><activity android:name=".NewUpstream" android:exported="false"/></application></manifest>'
+            source = '<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="io.freemytv" android:versionName="9.0" android:versionCode="9"><application android:name=".App" android:label="Free My TV"><activity android:name=".NewUpstream" android:exported="false"/></application></manifest>'
             (root / 'app/AndroidManifest.xml').write_text(source)
             (root / 'fork/android-manifest.xml').write_text('<manifest xmlns:android="http://schemas.android.com/apk/res/android"><queries><package android:name="player"/></queries><application><activity android:name=".ProfileManagerActivity" android:exported="false"/></application></manifest>')
             info = {'version':'1.3.13','title':'TV Thuis','repository':'Qballjos/tv-thuis','certificate':'94ea93a97b298f691f232eab656ec096d2d2701b4790b7e0308912632fd45138'}
             staged = m.android_manifest(root, info)
             tree = ET.fromstring(staged)
+            self.assertEqual(len(tree.findall('application')), 1, 'Android only reads one application block')
+            self.assertEqual(tree.find('application').get(m.ANDROID+'name'), '.App')
             self.assertEqual(tree.get(m.ANDROID + 'versionName'), '1.3.13')
             self.assertEqual(tree.get(m.ANDROID + 'versionCode'), '1030013')
             self.assertEqual([n.get(m.ANDROID+'name') for n in tree.findall('application/activity')], ['.NewUpstream','.ProfileManagerActivity'])
@@ -56,5 +58,16 @@ class ForkPackageTest(unittest.TestCase):
         self.assertIn('<name>TV Thuis</name>', result)
         self.assertIn('id="FreeMyTVio.FreeMyTV"', result)
         self.assertIn('<name>Free My TV</name>', source)
+
+    def test_real_manifest_profile_activity_is_inside_the_original_application(self):
+        m = self.module()
+        tree = ET.fromstring(m.android_manifest())
+        apps = tree.findall('application')
+        self.assertEqual(len(apps), 1)
+        self.assertEqual(apps[0].get(m.ANDROID+'name'), '.App')
+        profiles = [n for n in apps[0].findall('activity') if n.get(m.ANDROID+'name') == '.ProfileManagerActivity']
+        self.assertEqual(len(profiles), 1)
+        self.assertEqual(profiles[0].get(m.ANDROID+'exported'), 'false')
+        self.assertEqual(profiles[0].get(m.ANDROID+'process'), ':home')
 
 if __name__ == '__main__': unittest.main()
