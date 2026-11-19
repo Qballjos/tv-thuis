@@ -113,7 +113,6 @@ final class HomeMode {
      */
     static final String[] DEBLOAT = {
         "com.google.android.play.games", "com.google.android.youtube.tvmusic",        // Play Games, YouTube Music
-        "com.google.android.youtube.tv", "com.amazon.firetv.youtube",                // official YouTube; SmartTube and its bridge take over
         "com.google.android.feedback", "com.android.tv.feedbackconsent",              // bug-report sender and its consent nag
         "com.google.android.partnersetup",                                            // partner attribution
         "com.google.android.tv.remotecontrol.logging",                                // remote usage logging (Google TV Streamer)
@@ -176,6 +175,8 @@ final class HomeMode {
 
     /** Never turned off, not even by mistake (picture, sound, inputs, remote, store). Checked before every disable. */
     private static final Set<String> PROTECTED = new HashSet<>(Arrays.asList(
+        // Restore YouTube through offTheList on upgrades from the SmartTube-only setup.
+        "com.google.android.youtube.tv", "com.google.android.youtube",
         "com.tvos", "com.tcl.systemserver", "com.tcl.systemui.plugin", "com.tcl.tv", "com.tcl.tvinput",
         "com.tcl.hearaid", "com.dolby.android.audio.service", "com.tcl.globalkeyoverlay", "com.tcl.autopair",
         "com.tcl.UpdatePeripheral", "com.tcl.dashboard", "com.tcl.providers.config",

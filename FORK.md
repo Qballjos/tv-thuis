@@ -74,7 +74,10 @@ Trending gebruikt brede afbeeldingen als de manager die aanlevert. Levert een ou
 dan zoekt TV Thuis de brede afbeelding via de bestaande TMDB-sleutel, wanneer die is ingesteld. Zonder brede
 artwork, bij een mislukte download of zonder TMDB-sleutel blijft de gewone poster zichtbaar.
 
-De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**. De YouTube-knop opent SmartTube. Installeer daarbij de SmartTube-bridge (op Google TV en Android TV [ATV_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/ATV_SYTV_Bridge.apk), op Fire TV [Amazon_SYTV_Bridge.apk](https://github.com/yuliskov/SmartTube/releases/download/latest/Amazon_SYTV_Bridge.apk)). Bij de omschakeling naar TV Thuis gaat de officiële YouTube-app uit, zodat de bridge de stemzoekopdracht kan opvangen. Original zet YouTube weer aan.
+De plank toont, als ze geïnstalleerd zijn: **Wholphin**, **SmartTube**, **Prime Video**, **UniFi Protect** en **Homey**.
+De officiële **YouTube**-app blijft beschikbaar onder **Alle apps** en kan ook op de plank. Had TV Thuis hem uitgezet,
+dan zet de controle na een update hem weer aan. Op ondersteunde tv's kun je onder **Afstandsbedieningsknoppen** kiezen
+welke app de YouTube-knop opent. Met de officiële app actief kan Google TV YouTube-stemopdrachten naar YouTube sturen.
 
 ## Nieuwe bediening uit Free My TV
 

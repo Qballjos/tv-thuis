@@ -182,8 +182,6 @@ final class HomeApps {
             "com.xiaomi.mitv.manualhelp",           // Xiaomi: user manual
             "com.Smartdevice.emanual",              // Skyworth: user manual
             "com.google.android.videos",            // Google Play Movies (discontinued)
-            "com.google.android.youtube.tv",        // YouTube: SmartTube and its bridge take this
-            "com.amazon.firetv.youtube",
             "com.disney.starplus",                  // Star+ (merged into Disney+)
             "com.tcl.exhibit",                      // TCL: T-Exhibition
             "com.tcl.gallery",                      // TCL: Gallery
