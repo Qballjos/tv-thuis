@@ -4,6 +4,8 @@ Overzicht van wat deze fork ([Qballjos/tv-thuis](https://github.com/Qballjos/tv-
 
 ## Nog niet uitgebracht
 
+- De officiële YouTube-app blijft beschikbaar. De updatecontrole zet YouTube weer aan als TV Thuis hem eerder had uitgezet.
+
 ## 1.3.15
 
 - Profielmenu hersteld: de Android-manifestoverlay voegt het profielscherm nu toe aan het bestaande

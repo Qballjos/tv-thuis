@@ -33,6 +33,10 @@ public final class ForkMediaTest {
         void finish() { pending.remove(0).run(); }
     }
     public static void main(String[] args) {
+        for (String youtube : Arrays.asList("com.google.android.youtube.tv", "com.google.android.youtube", "com.amazon.firetv.youtube")) {
+            check(!HomeMode.mayTurnOff(youtube), "YouTube must stay enabled, including when already recorded: " + youtube);
+            check(!HomeApps.isHidden(youtube), "YouTube must be available in All Apps: " + youtube);
+        }
         Host h = new Host(); AioRecommendations library = new AioRecommendations(h);
         check(library.libraryNow("movie").isEmpty(), "Initial page is lazy");
         library.libraryNow("movie"); library.moreLibrary("movie");
@@ -70,6 +74,6 @@ public final class ForkMediaTest {
         check(SaverSources.source("auto", true, true, false) == SaverSources.Source.PHOTOS, "Explicit empty album never falls back");
         check(SaverSources.source("auto", false, false, true) == SaverSources.Source.PHOTOS, "Own photos win over recommendations");
         check(SaverSources.source("auto", false, false, false) == SaverSources.Source.RECOMMENDATIONS, "Automatic fallback uses showcase");
-        System.out.println("Fork media: lazy paging, identity/reset races, backoff, rail ordering and saver source policy passed.");
+        System.out.println("Fork media: YouTube availability, lazy paging, identity/reset races, backoff, rail ordering and saver source policy passed.");
     }
 }
